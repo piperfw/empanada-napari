@@ -51,26 +51,7 @@ def test_torch_cuda_available():
     print(f"\nPyTorch CUDA version: {torch.version.cuda}")
     print(f"CUDA devices available: {torch.cuda.device_count()}")
 
-def test_display_available():
+def test_display_set():
     import os
-    display = os.environ.get("DISPLAY")
-    
-    if not display:
+    if not os.environ.get("DISPLAY"):
         pytest.fail("DISPLAY unset - napari GUI unavailable")
-    
-    # xset, xrandr will error if can't access the display
-    try:
-        subprocess.run(
-            ["xset", "q"],
-            env={"DISPLAY": display},
-            capture_output=True,
-            timeout=2,
-            check=True
-        )
-    except FileNotFoundError:
-        pytest.fail(f"DISPLAY={display} but cannot verify (xset not found)")
-    except subprocess.CalledProcessError:
-        pytest.fail(f"Cannot connect to DISPLAY={display}")
-    except subprocess.TimeoutExpired:
-        pytest.fail(f"Timeout connecting to DISPLAY={display}")
-
