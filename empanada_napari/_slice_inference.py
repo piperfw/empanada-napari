@@ -22,10 +22,10 @@ from napari.qt.threading import thread_worker
 
 class SliceInferenceWidget:
     def __init__(self, 
+            image_layer: Image,
             model_config: str,
             viewer: Viewer = None,
             label_head: dict = None,
-            image_layer: Image = None,
             downsampling: int = 1,
             confidence_thr: float = 0.5,
             center_confidence_thr: float = 0.1,
@@ -150,12 +150,12 @@ class SliceInferenceWidget:
 
     # ---------------- Engine management ----------------
     def get_engine(self):
-        update_engine = (
+        reload_engine = (
             self.engine is None
             or self.last_config != self.model_config_name
         )
 
-        if update_engine:
+        if reload_engine:
             self.engine = Engine2d(
                 self.model_config,
                 inference_scale=self.downsampling,

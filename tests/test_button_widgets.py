@@ -1,54 +1,26 @@
 import os
+import re
 import subprocess
+import warnings
 import pytest
 import numpy as np
 from tifffile import imread
+import tifffile
 from empanada_napari._slice_inference import SliceInferenceWidget
 from empanada_napari._volume_inference import VolumeInferenceWidget
 from empanada_napari.utils import get_configs
 
+from .conftest import MODEL_NAMES, gen_slice_sanity_params, gen_slice_dset_params, \
+                gen_vol_sanity_params, gen_vol_dset_params, gen_ortho_dset_params
+
+# ---------------- Global Variables ----------------
 DATA_DIR = "datasets_for_tests"
 FILE_2D = "nanotomy_islet_rat375_crop1.tif"
 FILE_3D = "hela_cell_em.tif"
-MODEL_NAMES=list(get_configs().keys()) # DropNet, MitoNet, MitoNet_mini, NucleoNet
-
-# ---------------- Dataset Fixtures ----------------
-@pytest.fixture
-def image_3d():
-    rng = np.random.default_rng(0)
-    h, w, d = 100, 100, 100
-    z, y, x = np.mgrid[0:d, 0:h, 0:w]
-    image = np.zeros((h, w, d), dtype=np.float32)
-    # Parameters for blobs
-    n_blobs = 8
-    for _ in range(n_blobs):
-        cx = rng.uniform(0, w)
-        cy = rng.uniform(0, h)
-        cz = rng.uniform(0, d)
-        sigma = rng.uniform(4, 10)
-        amplitude = rng.uniform(120, 255)
-        blob = amplitude * np.exp(
-            -((z - cz)**2 + (x - cx)**2 + (y - cy)**2) / (2 * sigma**2)
-        )
-        image += blob
-    # Add mild noise
-    image += rng.normal(0, 10, size=image.shape)
-    # Normalize to uint8
-    image = np.clip(image, 0, 255).astype(np.uint8)
-    return image
-
-@pytest.fixture
-def tutorial_3d_image():
-    dataset_3d = "https://zenodo.org/records/15311513"
-    datapath =  os.path.join(DATA_DIR, FILE_3D)
-    if os.path.isfile(datapath) is False:
-        subprocess.run(["zenodo_get", dataset_3d, "-o", DATA_DIR])
-    image = imread(datapath)
-    print(type(image), image.shape)
-    return image
 
 # ---------------- Tests ----------------
 class TestSliceInference:
+    # ---------------- Dataset Fixtures ---------------- 
     @pytest.fixture
     def image_2d(self):
         rng = np.random.default_rng(0)
@@ -83,32 +55,21 @@ class TestSliceInference:
         if os.path.isfile(datapath) is False:
             subprocess.run(["zenodo_get", dataset_2d, "-o", DATA_DIR])
         image = imread(datapath)
+        if image.shape != (3000, 12600): # Rerun if incomplete download
+            subprocess.run(["zenodo_get", dataset_2d, "-o", DATA_DIR])
         print(type(image), image.shape)
         return image
 
-
-    @pytest.mark.parametrize(("test_args", "expected_shape"),
-    [
-        ({"model_config":MODEL_NAMES[1], "batch_mode":True, "use_gpu":True}, (100, 100)),
-        ({"model_config":MODEL_NAMES[0]}, (100, 100)),
-        ({"model_config":MODEL_NAMES[3]}, (100, 100)),
-         ({"fine_boundaries":True}, (100, 100)),
-         ({"semantic_only":True}, (100, 100)),
-         ({"fill_holes_in_segmentation":True}, (100, 100)),
-         ({"batch_mode":True}, (100, 100)),
-         ({"use_gpu":True}, (100, 100)),
-         ({"use_quantized":True}, (100, 100)),
-         ({"viewport":True}, (99, 99)),
-         ({"confine_to_roi":True}, (19, 14)),
-         ({"output_to_layer":True}, (100, 100))],
-         ids=["tutorial_params", "DropNet", "NucleoNet", "fine_boundaries", "semantic_only", 
-              "fill_holes_in_segmentation", "batch_mode", "use_gpu", "use_quantized", 
-              "viewport", "confine_to_roi", "output_to_layer"])
+    # ---------------- Tests ----------------
+    @pytest.mark.parametrize(("test_args", "expected_shape"), gen_slice_sanity_params(), #list(zip(slice_test_args, expect_shape)),
+            ids=["tutorial_params", "DropNet", "NucleoNet", "fine_boundaries", "semantic_only", 
+              "fill_holes_in_segmentation", "batch_mode", "use_gpu", "use_quantized", "viewport", 
+              "confine_to_roi", "output_to_layer"])
     def test_slice_inference_sanity(self, make_napari_viewer_proxy, image_2d, test_args, expected_shape):
         viewer = make_napari_viewer_proxy()
         image_layer = viewer.add_image(image_2d)
         if "model_config" not in test_args.keys():
-            test_args["model_config"] = MODEL_NAMES[2] #"MitoNet_v1_mini"
+            test_args["model_config"] = MODEL_NAMES['MitoNet_mini']
 
         if "output_to_layer" in test_args.keys():
             output_layer = viewer.add_image(np.zeros_like(image_2d))
@@ -127,13 +88,8 @@ class TestSliceInference:
         assert np.asarray(seg).shape == expected_shape
 
 
-    @pytest.mark.parametrize(("test_args", "expected_labels"),
-    [
-        ({"model_config":MODEL_NAMES[1], "batch_mode":True}, 3400),
-        ({"model_config":MODEL_NAMES[0]}, 840),
-        ({"model_config":MODEL_NAMES[2]}, 2400),
-        ({"model_config":MODEL_NAMES[3]}, 830)],
-         ids=["tutorial_params", "DropNet", "MitoNetMini", "NucleoNet"])
+    @pytest.mark.parametrize(("test_args", "expected_labels"), gen_slice_dset_params(), #list(zip(slice_test_args, expect_results)),
+            ids=["tutorial_params", "DropNet", "NucleoNet", "MitoNetMini"])
     def test_slice_inference_dataset(self, make_napari_viewer_proxy, tutorial_2d_image, test_args, expected_labels):
         viewer = make_napari_viewer_proxy()
         image_layer = viewer.add_image(tutorial_2d_image)
@@ -143,35 +99,67 @@ class TestSliceInference:
                                         use_gpu=True,
                                         **test_args)
         seg, _, _, _, _ = inference_config.config_and_run_inference(use_thread=False)
-        num_labels = np.unique(seg[seg!=0]).size
+        seg_nonzero = seg[seg != 0]
+        counts, _ = np.histogram(seg_nonzero, bins=10)
 
-        assert num_labels in range(expected_labels-100, expected_labels+100)
+        print(seg.min(), seg.max())
+
+        tolerance = 0.1  # 10% tolerance
+        for count, expected in zip(counts, expected_labels):
+            lb = expected * (1-tolerance)
+            ub = expected * (1+tolerance)
+            assert lb <= count <= ub
 
 
-class TestVolumeInferenceStack:
+class TestVolumeInference:
+    # ---------------- Dataset Fixtures ----------------
+    @pytest.fixture
+    def image_3d(self):
+        rng = np.random.default_rng(0)
+        h, w, d = 100, 100, 100
+        z, y, x = np.mgrid[0:d, 0:h, 0:w]
+        image = np.zeros((h, w, d), dtype=np.float32)
+        # Parameters for blobs
+        n_blobs = 8
+        for _ in range(n_blobs):
+            cx = rng.uniform(0, w)
+            cy = rng.uniform(0, h)
+            cz = rng.uniform(0, d)
+            sigma = rng.uniform(4, 10)
+            amplitude = rng.uniform(120, 255)
+            blob = amplitude * np.exp(
+                -((z - cz)**2 + (x - cx)**2 + (y - cy)**2) / (2 * sigma**2)
+            )
+            image += blob
+        # Add mild noise
+        image += rng.normal(0, 10, size=image.shape)
+        # Normalize to uint8
+        image = np.clip(image, 0, 255).astype(np.uint8)
+        return image
 
-    @pytest.mark.parametrize(("test_args", "expected_shape"),
-    [
-        ({"model_config":MODEL_NAMES[0]}, (100, 100, 100)),
-        ({"model_config":MODEL_NAMES[1]}, (100, 100, 100)),
-        ({"model_config":MODEL_NAMES[3]}, (100, 100, 100)),
-         ({"use_gpu":True}, (100, 100, 100)), 
-         ({"use_quantized":True}, (100, 100, 100)),
-         ({"multigpu":True}, (100, 100, 100)),
-         ({"fine_boundaries":True}, (100, 100, 100)),
-         ({"semantic_only":True}, (100, 100, 100)),
-         ({"fill_holes_in_segmentation":True}, (100, 100, 100)),
-         ({"allow_one_view":True}, (100, 100, 100))],
-         ids=["DropNet", "MitoNet", "NucleoNet", "use_gpu", "use_quantized",
-              "multigpu", "fine_boundaries", "semantic_only", 
-              "fill_holes_in_segmentation", "allow_one_view"]
-              )
+    @pytest.fixture
+    def tutorial_3d_image(self):
+        dataset_3d = "https://zenodo.org/records/15311513"
+        datapath =  os.path.join(DATA_DIR, FILE_3D)
+        if os.path.isfile(datapath) is False:
+            subprocess.run(["zenodo_get", dataset_3d, "-o", DATA_DIR])
+        image = imread(datapath)
+        if image.shape != (256, 256, 256): # Rerun if incomplete download
+            subprocess.run(["zenodo_get", dataset_3d, "-o", DATA_DIR])
+        print(type(image), image.shape)
+        return image
+
+
+    # ---------------- Tests  ---------------- 
+    @pytest.mark.parametrize(("test_args", "expected_shape"), gen_vol_sanity_params(), #list(zip(vol_test_args, expect_shape)),
+        ids=["MitoNet", "DropNet", "NucleoNet", "fine_boundaries", "semantic_only", 
+             "fill_holes_in_segmentation", "use_quantized", "use_gpu", "multigpu", "allow_one_view"])
     def test_volume_stack_inference_sanity(self, make_napari_viewer_proxy, image_3d, test_args, expected_shape):
         viewer = make_napari_viewer_proxy()
         image_layer = viewer.add_image(image_3d)
         inference_plane = "xy"
         if "model_config" not in test_args.keys():
-            test_args["model_config"] = MODEL_NAMES[2]
+            test_args["model_config"] = MODEL_NAMES['MitoNet_mini']
 
         inference_config = VolumeInferenceWidget(viewer=viewer,
                                         image_layer=image_layer,
@@ -184,55 +172,39 @@ class TestVolumeInferenceStack:
         assert stack.shape == expected_shape
 
 
-    @pytest.mark.parametrize(("test_args", "expected_labels"),
-    [
-        ({"model_config":MODEL_NAMES[0]}, 0),
-        ({"model_config":MODEL_NAMES[1]}, 120),
-        ({"model_config":MODEL_NAMES[2]}, 100),
-        ({"model_config":MODEL_NAMES[3]}, 1)],
-         ids=["DropNet", "MitoNet", "MitoNet_v1_mini", "NucleoNet"])
+    @pytest.mark.parametrize(("test_args", "expected_labels"), gen_vol_dset_params(), #list(zip(vol_dset_args, expect_results)),
+            ids=["MitoNet", "DropNet", "NucleoNet", "MitoNetMini"])
     def test_volume_stack_inference_dataset(self, make_napari_viewer_proxy, tutorial_3d_image, test_args, expected_labels):
         viewer = make_napari_viewer_proxy()
         image_layer = viewer.add_image(tutorial_3d_image)
-        inference_plane = "xy"
+        # inference_plane = "xy"
 
         inference_config = VolumeInferenceWidget(viewer=viewer,
                                         image_layer=image_layer,
                                         return_panoptic=True,
                                         use_gpu=True,
-                                        inference_plane=inference_plane,
+                                        # inference_plane=inference_plane,
                                         **test_args)
         
         stack, axis_name, trackers_dict = inference_config.config_and_run_inference(use_thread=False)
-        num_labels = np.unique(stack[stack!=0]).size
+        seg_nonzero = stack[stack != 0]
+        counts, _ = np.histogram(seg_nonzero, bins=10)
 
-        assert num_labels in range(max(0, expected_labels-20), expected_labels+20)
+        tolerance = 0.1  # 10% tolerance
+        for count, expected in zip(counts, expected_labels):
+            lb = expected * (1-tolerance)
+            ub = expected * (1+tolerance)
+            assert lb <= count <= ub
 
-   
 
-class TestVolumeInferenceOrthoplane:
-    
-    @pytest.mark.parametrize(("test_args", "expected_shape"),
-    [
-        ({"model_config":MODEL_NAMES[0]}, (100, 100, 100)),
-        ({"model_config":MODEL_NAMES[1]}, (100, 100, 100)),
-        ({"model_config":MODEL_NAMES[3]}, (100, 100, 100)),
-         ({"use_gpu":True}, (100, 100, 100)), 
-         ({"use_quantized":True}, (100, 100, 100)),
-         ({"multigpu":True}, (100, 100, 100)),
-         ({"fine_boundaries":True}, (100, 100, 100)),
-         ({"semantic_only":True}, (100, 100, 100)),
-         ({"fill_holes_in_segmentation":True}, (100, 100, 100)),
-         ({"allow_one_view":True}, (100, 100, 100))],
-         ids=["DropNet", "MitoNet", "NucleoNet", "use_gpu", "use_quantized",
-              "multigpu", "fine_boundaries", "semantic_only", 
-              "fill_holes_in_segmentation", "allow_one_view"]
-              )
-    def test_volume_inference_orthoplane_inference_sanity(self, make_napari_viewer_proxy, image_3d, test_args, expected_shape):   
+    @pytest.mark.parametrize(("test_args", "expected_shape"), gen_vol_sanity_params(), #list(zip(vol_test_args, expect_shape)),
+        ids=["MitoNet", "DropNet", "NucleoNet", "fine_boundaries", "semantic_only", 
+             "fill_holes_in_segmentation", "use_quantized", "use_gpu", "multigpu", "allow_one_view"])
+    def test_volume_orthoplane_inference_sanity(self, make_napari_viewer_proxy, image_3d, test_args, expected_shape):   
         viewer = make_napari_viewer_proxy()
         image_layer = viewer.add_image(image_3d)
         if "model_config" not in test_args.keys():
-            test_args["model_config"] = MODEL_NAMES[2]
+            test_args["model_config"] = MODEL_NAMES['MitoNet_mini']
 
         inference_config = VolumeInferenceWidget(viewer=viewer,
                                         image_layer=image_layer,
@@ -241,19 +213,14 @@ class TestVolumeInferenceOrthoplane:
                                         **test_args)
         
         result = inference_config.config_and_run_inference(use_thread=False)
-        for stack, axis_name in result:
+        for _, stack in result.items():
             assert isinstance(stack, np.ndarray)
             assert stack.shape == expected_shape
 
 
-    @pytest.mark.parametrize(("test_args", "expected_labels"),
-    [
-        ({"model_config":MODEL_NAMES[0]}, 0),
-        ({"model_config":MODEL_NAMES[1]}, 120),
-        ({"model_config":MODEL_NAMES[2]}, 100),
-        ({"model_config":MODEL_NAMES[3]}, 1)],
-         ids=["DropNet", "MitoNet", "MitoNet_v1_mini", "NucleoNet"])
-    def test_volume_inference_orthoplane_inference_dataset(self, make_napari_viewer_proxy, tutorial_3d_image, test_args, expected_labels):   
+    @pytest.mark.parametrize(("test_args", "expected_labels"), gen_ortho_dset_params(), #list(zip(vol_dset_args, expect_results)),
+            ids=["MitoNet", "DropNet", "NucleoNet", "MitoNetMini"])
+    def test_volume_orthoplane_inference_dataset(self, make_napari_viewer_proxy, tutorial_3d_image, test_args, expected_labels):   
         viewer = make_napari_viewer_proxy()
         image_layer = viewer.add_image(tutorial_3d_image)
 
@@ -265,6 +232,13 @@ class TestVolumeInferenceOrthoplane:
                                         **test_args)
 
         result = inference_config.config_and_run_inference(use_thread=False)
-        for stack, axis_name in result:
-            num_labels = np.unique(stack[stack!=0]).size
-            assert num_labels in range(max(0, expected_labels-20), expected_labels+20)
+        tolerance = 0.1  # 10% tolerance
+
+        for (_, stack), expected_label in zip(result.items(), expected_labels):
+            seg_nonzero = stack[stack != 0]
+            counts, _ = np.histogram(seg_nonzero, bins=10)
+
+            for count, expected in zip(counts, expected_label):
+                lb = expected * (1-tolerance)
+                ub = expected * (1+tolerance)
+                assert lb <= count <= ub
