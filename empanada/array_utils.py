@@ -342,7 +342,7 @@ def mask_ioa(mask1, mask2):
     return intersection / area
 
 @numba.jit(nopython=True)
-def intersection_from_ranges(merged_runs, changes):
+def intersection_from_ranges(merged_runs: np.ndarray, changes: np.ndarray):
     r"""
     Computes intersection from run ranges.
 
@@ -519,7 +519,7 @@ def split_range_by_votes(running_range, num_votes, vote_thr=2):
     return split_voted_ranges
 
 @numba.jit(nopython=True)
-def extend_range(range1, range2, num_votes: np.array) -> Tuple[np.array, np.array]:
+def extend_range(range1, range2, num_votes: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     r"""Merges together two overlapping runs and updates the number
     of votes at each index within the range.
 
@@ -561,7 +561,7 @@ def extend_range(range1, range2, num_votes: np.array) -> Tuple[np.array, np.arra
     return range1, num_votes
 
 @numba.jit(nopython=True)
-def rle_voting(ranges, vote_thr=2, init_index=None, term_index=None):
+def rle_voting(ranges: np.ndarray, vote_thr=2, init_index=None, term_index=None):
     r"""Finds overlapping ranges and tabulates the number
     of votes at each index within those ranges. Outputs
     ranges in which all indices had vote_thr or more votes.
@@ -656,7 +656,7 @@ def concat_sort_ranges(list_of_ranges):
     return ranges[sort_idx]
 
 @numba.jit(nopython=True)
-def _join_ranges(ranges):
+def _join_ranges(ranges: np.ndarray):
     r"""Joins overlapping ranges into non-overlapping ranges.
 
     Args:
@@ -699,7 +699,7 @@ def join_ranges(list_of_ranges):
     return  np.array(_join_ranges(ranges))
 
 @numba.jit(nopython=True)
-def invert_ranges(ranges, size):
+def invert_ranges(ranges: np.ndarray, size):
     inverse_ranges = np.empty(shape=(0,2), dtype=np.int64)
     if ranges[0][0] > 0:
         inverse_ranges = np.vstack((inverse_ranges, np.array([[0, ranges[0][0]]])))
