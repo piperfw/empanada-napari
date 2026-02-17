@@ -367,7 +367,7 @@ def volume_inference_widget():
                           value=list(model_configs.keys())[0], tooltip='Model to use for inference'),
         use_gpu=dict(widget_type='CheckBox', text='Use GPU', value=device_count() >= 1,
                      tooltip='If checked, run on GPU 0'),
-        use_quantized=dict(widget_type='CheckBox', text='Use quantized model', value=device_count()==0,
+        use_quantized=dict(widget_type='CheckBox', text='Use quantized model', value=device_count()==0 and quantized_supported,
                            tooltip='If checked, use the quantized model for faster CPU inference.'),
         multigpu=dict(widget_type='CheckBox', text='Multi GPU', value=False,
                       tooltip='If checked, run on all available GPUs'),
