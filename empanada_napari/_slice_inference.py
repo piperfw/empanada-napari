@@ -93,29 +93,6 @@ class SliceInferenceWidget:
             if type(image2d) == da.core.Array:
                 image2d = image2d.compute()
 
-        
-        #### The part above should return a 2D slice from the Zarr input fine
-
-            #### Now, we need to __split the 2D slice into tiles__ because the slice is still very big!
-            #### This part should only run if we have an image that is a zarr or dask arr
-                # Need a condition that the array should meet to run inference over tiles... maybe arr size?
-            
-                #### Setup jobs:
-                # if batch_mode false
-
-                #create image2dout array
-                # image2dout = np.zeros_like(image2d)
-
-                # compute segmentation on each of the tiles
-                # run in parallel
-                # Pass the result to _show_test_result() or _store_test_result()
-
-                # if batch_mode true
-                # compute segmentation using the run_model_batch
-                # run in parallel
-                # Pass result to _show/store_test_result()
-
-
         # Run the inference methods (either threaded or synchronously)
         match (self.batch_mode, use_thread):
             case True, True:
