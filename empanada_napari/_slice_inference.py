@@ -123,6 +123,7 @@ class SliceInferenceWidget:
             case False, False: # For testing non-batch slice inference
                 seg, axis, plane, y, x = self._run_model(self.engine, image2d, axis, plane, y, x, self.fill_holes)
                 return seg, axis, plane, y, x
+            
         return
 
     # ---------------- Engine management ----------------
@@ -428,7 +429,7 @@ class SliceInferenceWidget:
             # 2D case
             self.output_layer.data = seg
 
-        self.output_layer.visible = False
+        # self.output_layer.visible = False
         self.output_layer.visible = True
 
         self.pbar.hide()
@@ -548,7 +549,7 @@ def slice_inference_widget():
     scroll = QScrollArea()
     scroll.setWidget(widget._widget._qwidget)
     widget._widget._qwidget = scroll
-
+    
     return widget
 
 
