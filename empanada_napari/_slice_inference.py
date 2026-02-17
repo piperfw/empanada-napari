@@ -17,7 +17,13 @@ from skimage import measure
 from scipy.ndimage import binary_fill_holes
 from qtpy.QtWidgets import QScrollArea
 from torch.cuda import device_count
+from torch.backends.quantized import engine
 from napari.qt.threading import thread_worker
+
+quantized_supported = True
+if engine in (None or 'none'):
+    quantized_supported = False
+    
 
 
 class SliceInferenceWidget:
@@ -282,6 +288,13 @@ class SliceInferenceWidget:
         return roi, min_y, min_x, max_y, max_x, mask[min_y:max_y, min_x:max_x]
     
     def _check_option_compatibility(self):
+        if quantized_supported == False and self.using_quantized:
+            raise RuntimeWarning(
+                "No quantized backend is selected. " \
+                f"torch.backends.quantized.engine = {engine}" \
+                "Using Quantized Model may fail."
+            )
+
         if self.output_to_layer:
             assert self.output_layer is not None, "Must select an output layer or uncheck Output to layer!"
             assert self.output_layer.data.shape == self.image_layer.data.shape, \
@@ -478,7 +491,7 @@ def slice_inference_widget():
 
     gui_params['use_gpu'] = dict(widget_type='CheckBox', text='Use GPU', value=device_count() >= 1,
                                  tooltip='If checked, run on GPU 0')
-    gui_params['use_quantized'] = dict(widget_type='CheckBox', text='Use quantized model', value=device_count() == 0,
+    gui_params['use_quantized'] = dict(widget_type='CheckBox', text='Use quantized model', value=device_count() == 0 and quantized_supported,
                                        tooltip='If checked, run on GPU 0')
     # Add the new option to the gui_params dictionary
     gui_params['confine_to_roi'] = dict(widget_type='CheckBox', text='Confine to ROI', value=False,

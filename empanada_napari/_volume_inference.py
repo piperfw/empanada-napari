@@ -10,11 +10,17 @@ from qtpy.QtWidgets import QScrollArea
 
 import zarr
 import dask.array as da
+import torch
 from torch.cuda import device_count
+from torch.backends.quantized import engine, supported_engines
 from empanada_napari.inference import Engine3d, tracker_consensus, stack_postprocessing
 from empanada_napari.multigpu import MultiGPUEngine3d
 from empanada_napari.utils import get_configs, abspath
 from empanada.config_loaders import read_yaml
+
+quantized_supported = True
+if engine in (None or 'none'):
+    quantized_supported = False
 
 class VolumeInferenceWidget:
     def __init__(self, 
@@ -92,6 +98,7 @@ class VolumeInferenceWidget:
             assert len(chunk_size) == 3, f"Chunk size must be 1 or 3 integers, got {chunk_size}"
             self.chunk_size = tuple(int(s) for s in chunk_size)
         
+        self._check_option_compatibility()
         self.pbar = pbar
 
 # ---------------- Option handling & inference running entrypoint ----------------
@@ -230,6 +237,16 @@ class VolumeInferenceWidget:
         return
 
 # ---------------- Helper methods ----------------
+    def _check_option_compatibility(self):
+        if quantized_supported == False and self.using_quantized:
+            raise RuntimeWarning(
+                "No quantized backend is selected. " \
+                f"torch.backends.quantized.engine = {engine}" \
+                "Using Quantized Model may fail."
+            )
+    
+        return
+    
     def _new_layers(self, mask, description, instances=None):
         metadata = {}
         if instances is not None:
@@ -350,7 +367,7 @@ def volume_inference_widget():
                           value=list(model_configs.keys())[0], tooltip='Model to use for inference'),
         use_gpu=dict(widget_type='CheckBox', text='Use GPU', value=device_count() >= 1,
                      tooltip='If checked, run on GPU 0'),
-        use_quantized=dict(widget_type='CheckBox', text='Use quantized model', value=device_count() == 0,
+        use_quantized=dict(widget_type='CheckBox', text='Use quantized model', value=device_count()==0,
                            tooltip='If checked, use the quantized model for faster CPU inference.'),
         multigpu=dict(widget_type='CheckBox', text='Multi GPU', value=False,
                       tooltip='If checked, run on all available GPUs'),
