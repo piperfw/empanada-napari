@@ -157,7 +157,7 @@ def tracker_consensus(
 
         # decode and fill the instances
         if zarr_store is not None:
-            consensus_vol = zarr_store.create_dataset(
+            consensus_vol = zarr_store.create_array(
                 f'{class_name}', shape=shape3d, dtype=class_dtype,
                 overwrite=True, chunks=chunk_size
             )
