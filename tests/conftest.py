@@ -2,12 +2,6 @@ import os
 import re
 from empanada_napari.utils import get_configs
 
-'''Set environmental variables for integration & benchmark tests to run headlessly/without OpenGL'''
-# os.environ["QT_QPA_PLATFORM"] = "offscreen"
-# os.environ.pop("DISPLAY", None)
-# os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
-
-
 '''Generate Parameters For test_button_widgets inference tests & benchmarking'''
 MODEL_NAMES = {} 
 for name in list(get_configs().keys()):
