@@ -6,6 +6,7 @@ import pytest
 import numpy as np
 from tifffile import imread
 import tifffile
+from napari.components import ViewerModel
 from empanada_napari._slice_inference import SliceInferenceWidget
 from empanada_napari._volume_inference import VolumeInferenceWidget
 from empanada_napari.utils import get_configs
@@ -65,8 +66,8 @@ class TestSliceInference:
             ids=["tutorial_params", "DropNet", "NucleoNet", "fine_boundaries", "semantic_only", 
               "fill_holes_in_segmentation", "batch_mode", "use_gpu", "use_quantized", "viewport", 
               "confine_to_roi", "output_to_layer"])
-    def test_slice_inference_sanity(self, make_napari_viewer_proxy, image_2d, test_args, expected_shape):
-        viewer = make_napari_viewer_proxy()
+    def test_slice_inference_sanity(self, image_2d, test_args, expected_shape):
+        viewer = ViewerModel()
         image_layer = viewer.add_image(image_2d)
         if "model_config" not in test_args.keys():
             test_args["model_config"] = MODEL_NAMES['MitoNet_mini']
@@ -90,8 +91,8 @@ class TestSliceInference:
 
     @pytest.mark.parametrize(("test_args", "expected_labels"), gen_slice_dset_params(), #list(zip(slice_test_args, expect_results)),
             ids=["tutorial_params", "DropNet", "NucleoNet", "MitoNetMini"])
-    def test_slice_inference_dataset(self, make_napari_viewer_proxy, tutorial_2d_image, test_args, expected_labels):
-        viewer = make_napari_viewer_proxy()
+    def test_slice_inference_dataset(self, tutorial_2d_image, test_args, expected_labels):
+        viewer = ViewerModel()
         image_layer = viewer.add_image(tutorial_2d_image)
 
         inference_config = SliceInferenceWidget(viewer=viewer,
@@ -154,8 +155,8 @@ class TestVolumeInference:
     @pytest.mark.parametrize(("test_args", "expected_shape"), gen_vol_sanity_params(), #list(zip(vol_test_args, expect_shape)),
         ids=["MitoNet", "DropNet", "NucleoNet", "fine_boundaries", "semantic_only", 
              "fill_holes_in_segmentation", "use_quantized", "use_gpu", "multigpu", "allow_one_view"])
-    def test_volume_stack_inference_sanity(self, make_napari_viewer_proxy, image_3d, test_args, expected_shape):
-        viewer = make_napari_viewer_proxy()
+    def test_volume_stack_inference_sanity(self, image_3d, test_args, expected_shape):
+        viewer = ViewerModel()
         image_layer = viewer.add_image(image_3d)
         inference_plane = "xy"
         if "model_config" not in test_args.keys():
@@ -174,8 +175,8 @@ class TestVolumeInference:
 
     @pytest.mark.parametrize(("test_args", "expected_labels"), gen_vol_dset_params(), #list(zip(vol_dset_args, expect_results)),
             ids=["MitoNet", "DropNet", "NucleoNet", "MitoNetMini"])
-    def test_volume_stack_inference_dataset(self, make_napari_viewer_proxy, tutorial_3d_image, test_args, expected_labels):
-        viewer = make_napari_viewer_proxy()
+    def test_volume_stack_inference_dataset(self, tutorial_3d_image, test_args, expected_labels):
+        viewer = ViewerModel()
         image_layer = viewer.add_image(tutorial_3d_image)
         # inference_plane = "xy"
 
@@ -200,8 +201,8 @@ class TestVolumeInference:
     @pytest.mark.parametrize(("test_args", "expected_shape"), gen_vol_sanity_params(), #list(zip(vol_test_args, expect_shape)),
         ids=["MitoNet", "DropNet", "NucleoNet", "fine_boundaries", "semantic_only", 
              "fill_holes_in_segmentation", "use_quantized", "use_gpu", "multigpu", "allow_one_view"])
-    def test_volume_orthoplane_inference_sanity(self, make_napari_viewer_proxy, image_3d, test_args, expected_shape):   
-        viewer = make_napari_viewer_proxy()
+    def test_volume_orthoplane_inference_sanity(self, image_3d, test_args, expected_shape):   
+        viewer = ViewerModel()
         image_layer = viewer.add_image(image_3d)
         if "model_config" not in test_args.keys():
             test_args["model_config"] = MODEL_NAMES['MitoNet_mini']
@@ -220,8 +221,8 @@ class TestVolumeInference:
 
     @pytest.mark.parametrize(("test_args", "expected_labels"), gen_ortho_dset_params(), #list(zip(vol_dset_args, expect_results)),
             ids=["MitoNet", "DropNet", "NucleoNet", "MitoNetMini"])
-    def test_volume_orthoplane_inference_dataset(self, make_napari_viewer_proxy, tutorial_3d_image, test_args, expected_labels):   
-        viewer = make_napari_viewer_proxy()
+    def test_volume_orthoplane_inference_dataset(self, tutorial_3d_image, test_args, expected_labels):   
+        viewer = ViewerModel()
         image_layer = viewer.add_image(tutorial_3d_image)
 
         inference_config = VolumeInferenceWidget(viewer=viewer,
