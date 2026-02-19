@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - '**'  # Run on all branches
-  workflow_dispatch:  # Optional manual trigger
 
 env:
   # GitHub container registry (could use dockerhub)
