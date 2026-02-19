@@ -36,12 +36,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install napari[all]
           pip install .[test]
-          
+      
       - name: Run Tests
         env:
           PLATFORM: ${{ matrix.platform }}
         run: python -m pytest -s -vv test_*.py
-
   # build-and-push:
   #   needs: test # tests must complete
   #   # Optional: Only build container if main or manually trigger
