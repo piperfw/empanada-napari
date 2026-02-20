@@ -1,3 +1,13 @@
+# container-test branch
+Build the container from root of repository:
+```
+docker build -t empanada-napari:test .
+```
+Run the container (entrypoint includes `tests/run_container_tests.sh`):
+```
+docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix --device=/dev/dri:/dev/dri empanada-napari:test
+```
+
 # empanada-napari
 
 > [!IMPORTANT]
