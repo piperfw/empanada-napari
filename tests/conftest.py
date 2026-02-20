@@ -3,17 +3,30 @@ import re
 import pytest
 from empanada_napari.utils import get_configs
 
+
 '''Skip Benchmarking Tests unless specifically called'''
+def pytest_addoption(parser):
+    parser.addoption("--runslow", action="store_true", default=False, help="run slow tests")
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "slow: mark test as slow to run")
+
 def pytest_collection_modifyitems(config, items):
-# def skip_benchmark_tests(config, items):
-    marker_expr = config.getoption("-m")
     # If -m wasn't given OR it doesn't mention "benchmark"
-    if not marker_expr or "benchmark" not in marker_expr:
+    if not config.getoption("-m") or "benchmark" not in config.getoption("-m"):
         skip_bench = pytest.mark.skip(reason="use `-m benchmark` to run benchmark tests")
 
         for item in items:
             if "benchmark" in item.keywords:
                 item.add_marker(skip_bench)
+
+    if config.getoption("--runslow"):
+        # --runslow given in cli: do not skip slow tests
+        return
+    skip_slow = pytest.mark.skip(reason="need --runslow option to run")
+    for item in items:
+        if "slow" in item.keywords:
+            item.add_marker(skip_slow)
 
 
 '''Generate Parameters For test_button_widgets inference tests & benchmarking'''
