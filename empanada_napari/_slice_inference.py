@@ -17,15 +17,21 @@ from skimage import measure
 from scipy.ndimage import binary_fill_holes
 from qtpy.QtWidgets import QScrollArea
 from torch.cuda import device_count
+from torch.backends.quantized import engine
 from napari.qt.threading import thread_worker
+
+quantized_supported = True
+if engine in (None or 'none'):
+    quantized_supported = False
+    
 
 
 class SliceInferenceWidget:
     def __init__(self, 
+            image_layer: Image,
             model_config: str,
             viewer: Viewer = None,
             label_head: dict = None,
-            image_layer: Image = None,
             downsampling: int = 1,
             confidence_thr: float = 0.5,
             center_confidence_thr: float = 0.1,
@@ -93,29 +99,6 @@ class SliceInferenceWidget:
             if type(image2d) == da.core.Array:
                 image2d = image2d.compute()
 
-        
-        #### The part above should return a 2D slice from the Zarr input fine
-
-            #### Now, we need to __split the 2D slice into tiles__ because the slice is still very big!
-            #### This part should only run if we have an image that is a zarr or dask arr
-                # Need a condition that the array should meet to run inference over tiles... maybe arr size?
-            
-                #### Setup jobs:
-                # if batch_mode false
-
-                #create image2dout array
-                # image2dout = np.zeros_like(image2d)
-
-                # compute segmentation on each of the tiles
-                # run in parallel
-                # Pass the result to _show_test_result() or _store_test_result()
-
-                # if batch_mode true
-                # compute segmentation using the run_model_batch
-                # run in parallel
-                # Pass result to _show/store_test_result()
-
-
         # Run the inference methods (either threaded or synchronously)
         match (self.batch_mode, use_thread):
             case True, True:
@@ -146,16 +129,17 @@ class SliceInferenceWidget:
             case False, False: # For testing non-batch slice inference
                 seg, axis, plane, y, x = self._run_model(self.engine, image2d, axis, plane, y, x, self.fill_holes)
                 return seg, axis, plane, y, x
+            
         return
 
     # ---------------- Engine management ----------------
     def get_engine(self):
-        update_engine = (
+        reload_engine = (
             self.engine is None
             or self.last_config != self.model_config_name
         )
 
-        if update_engine:
+        if reload_engine:
             self.engine = Engine2d(
                 self.model_config,
                 inference_scale=self.downsampling,
@@ -304,6 +288,13 @@ class SliceInferenceWidget:
         return roi, min_y, min_x, max_y, max_x, mask[min_y:max_y, min_x:max_x]
     
     def _check_option_compatibility(self):
+        if quantized_supported == False and self.using_quantized:
+            raise RuntimeWarning(
+                "No quantized backend is selected. " \
+                f"torch.backends.quantized.engine = {engine}" \
+                "Using Quantized Model may fail."
+            )
+
         if self.output_to_layer:
             assert self.output_layer is not None, "Must select an output layer or uncheck Output to layer!"
             assert self.output_layer.data.shape == self.image_layer.data.shape, \
@@ -451,7 +442,7 @@ class SliceInferenceWidget:
             # 2D case
             self.output_layer.data = seg
 
-        self.output_layer.visible = False
+        # self.output_layer.visible = False
         self.output_layer.visible = True
 
         self.pbar.hide()
@@ -500,7 +491,7 @@ def slice_inference_widget():
 
     gui_params['use_gpu'] = dict(widget_type='CheckBox', text='Use GPU', value=device_count() >= 1,
                                  tooltip='If checked, run on GPU 0')
-    gui_params['use_quantized'] = dict(widget_type='CheckBox', text='Use quantized model', value=device_count() == 0,
+    gui_params['use_quantized'] = dict(widget_type='CheckBox', text='Use quantized model', value=device_count() == 0 and quantized_supported,
                                        tooltip='If checked, run on GPU 0')
     # Add the new option to the gui_params dictionary
     gui_params['confine_to_roi'] = dict(widget_type='CheckBox', text='Confine to ROI', value=False,
@@ -571,7 +562,7 @@ def slice_inference_widget():
     scroll = QScrollArea()
     scroll.setWidget(widget._widget._qwidget)
     widget._widget._qwidget = scroll
-
+    
     return widget
 
 

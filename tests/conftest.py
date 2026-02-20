@@ -5,7 +5,6 @@ from empanada_napari.utils import get_configs
 
 '''Skip Benchmarking Tests unless specifically called'''
 def pytest_collection_modifyitems(config, items):
-# def skip_benchmark_tests(config, items):
     marker_expr = config.getoption("-m")
     # If -m wasn't given OR it doesn't mention "benchmark"
     if not marker_expr or "benchmark" not in marker_expr:
