@@ -39,4 +39,6 @@ jobs:
       - name: Run Tests
         env:
           PLATFORM: ${{ matrix.platform }}
-        run: python -m pytest -s -vv 'tests/test_*.py'
+        run: |
+          cd tests
+          python -m pytest -s -vv test_*.py
