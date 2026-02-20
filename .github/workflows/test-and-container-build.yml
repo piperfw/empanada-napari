@@ -40,7 +40,10 @@ jobs:
         env:
           PLATFORM: ${{ matrix.platform }}
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -vv test
+        run: |
+          python -m pytest -vv test
+          pkill -f python || true
+          pkill -f napari || true
 
 
   # build-and-push:
