@@ -27,6 +27,7 @@ def test_module_imports():
     except ImportError as e:
         pytest.fail(f"Failed to import required module: {e}")
 
+@pytest.mark.gpu
 @pytest.mark.dependency(name="nvidia_driver")
 def test_nvidia_driver_available():
     try:
@@ -39,6 +40,7 @@ def test_nvidia_driver_available():
     except Exception as e:
         pytest.fail(f"NVIDIA driver not found ({e}) - GPU acceleration unavailable")
 
+@pytest.mark.gpu
 @pytest.mark.dependency()
 def test_torch_cuda_available():
     import torch

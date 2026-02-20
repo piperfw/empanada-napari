@@ -1,6 +1,7 @@
 import pytest
 import torch
 
+@pytest.mark.gpu
 @pytest.mark.dependency(depends=["test_install.py::test_torch_cuda_available"])
 def test_cuda_usable():
     """Verify CUDA runtime actually works"""

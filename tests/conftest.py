@@ -28,6 +28,19 @@ def pytest_collection_modifyitems(config, items):
         if "slow" in item.keywords:
             item.add_marker(skip_slow)
 
+    
+    try:
+        import torch
+        has_gpu = torch.cuda.is_available()
+    except Exception:
+        has_gpu = False
+
+    if not has_gpu:
+        skip_gpu = pytest.mark.skip(reason="No GPU available")
+        for item in items:
+            if "gpu" in item.keywords:
+                item.add_marker(skip_gpu)
+
 
 '''Generate Parameters For test_button_widgets inference tests & benchmarking'''
 MODEL_NAMES = {} 
