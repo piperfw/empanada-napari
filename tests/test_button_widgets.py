@@ -6,7 +6,6 @@ import pytest
 import numpy as np
 from tifffile import imread
 import tifffile
-from torch.backends.quantized import engine
 from napari.components import ViewerModel
 from empanada_napari._slice_inference import SliceInferenceWidget
 from empanada_napari._volume_inference import VolumeInferenceWidget
@@ -65,7 +64,7 @@ class TestSliceInference:
     # ---------------- Tests ----------------
     @pytest.mark.parametrize(("test_args", "expected_shape"), gen_slice_sanity_params(), #list(zip(slice_test_args, expect_shape)),
             ids=["tutorial_params", "DropNet", "NucleoNet", "fine_boundaries", "semantic_only", 
-              "fill_holes_in_segmentation", "batch_mode", "use_gpu", "use_quantized", "viewport", 
+              "fill_holes_in_segmentation", "use_quantized", "batch_mode", "use_gpu", "viewport", 
               "confine_to_roi", "output_to_layer"])
     def test_slice_inference_sanity(self, image_2d, test_args, expected_shape):
         viewer = ViewerModel()
@@ -80,9 +79,6 @@ class TestSliceInference:
         if "confine_to_roi" in test_args.keys():
             triangle = np.array([[11, 13], [30, 6], [30, 20]])
             viewer.add_shapes(triangle, shape_type="polygon", edge_width=5)
-
-        if "use_quantized" in test_args.keys() and engine in (None or 'none'):
-            pytest.skip("No quantized backend is selected. Testing quantized model skipped.")
 
         inference_config = SliceInferenceWidget(viewer=viewer,
                                         image_layer=image_layer,
@@ -167,9 +163,6 @@ class TestVolumeInference:
         if "model_config" not in test_args.keys():
             test_args["model_config"] = MODEL_NAMES['MitoNet_mini']
 
-        if "use_quantized" in test_args.keys() and engine in (None or 'none'):
-            pytest.skip("No quantized backend is selected. Testing quantized model skipped.")
-
         inference_config = VolumeInferenceWidget(viewer=viewer,
                                         image_layer=image_layer,
                                         return_panoptic=True,
@@ -215,9 +208,6 @@ class TestVolumeInference:
         image_layer = viewer.add_image(image_3d)
         if "model_config" not in test_args.keys():
             test_args["model_config"] = MODEL_NAMES['MitoNet_mini']
-
-        if "use_quantized" in test_args.keys() and engine in (None or 'none'):
-            pytest.skip("No quantized backend is selected. Testing quantized model skipped.")
 
         inference_config = VolumeInferenceWidget(viewer=viewer,
                                         image_layer=image_layer,

@@ -27,8 +27,7 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "slow" in item.keywords:
             item.add_marker(skip_slow)
-
-    
+                
     try:
         import torch
         has_gpu = torch.cuda.is_available()
