@@ -6,6 +6,8 @@ from empanada_napari.utils import get_configs
 from empanada_napari._slice_inference import SliceInferenceWidget
 from empanada_napari._volume_inference import VolumeInferenceWidget
 
+from .conftest import MODEL_NAMES, gen_slice_dset_params, gen_vol_dset_params, gen_ortho_dset_params
+
 DATA_DIR = "datasets_for_tests"
 FILE_2D = "nanotomy_islet_rat375_crop1.tif"
 FILE_3D = "hela_cell_em.tif"
@@ -36,13 +38,8 @@ class TestSliceInference:
         return image
 
 
-    @pytest.mark.parametrize("test_args",
-    [
-        ({"model_config":MODEL_NAMES[0]}),
-        ({"model_config":MODEL_NAMES[1]}),
-        ({"model_config":MODEL_NAMES[2]}),
-        ({"model_config":MODEL_NAMES[3]})],
-         ids=["tutorial_params", "DropNet", "MitoNetMini", "NucleoNet"])
+    @pytest.mark.parametrize(("test_args", "expected_labels"), gen_slice_dset_params(),
+            ids=["tutorial_params", "DropNet", "NucleoNet", "MitoNetMini"])
     def test_slice_inference_benchmark(self, make_napari_viewer_proxy, tutorial_2d_image, test_args, benchmark):
         viewer = make_napari_viewer_proxy()
         image_layer = viewer.add_image(tutorial_2d_image)
@@ -53,15 +50,10 @@ class TestSliceInference:
         benchmark(inference_config.config_and_run_inference, use_thread=False)
 
 
-class TestVolumeInferenceStack:
+class TestVolumeInference:
     
-    @pytest.mark.parametrize("test_args",
-    [
-        ({"model_config":MODEL_NAMES[0]}),
-        ({"model_config":MODEL_NAMES[1]}),
-        ({"model_config":MODEL_NAMES[2]}),
-        ({"model_config":MODEL_NAMES[3]})],
-         ids=["DropNet", "MitoNet", "MitoNet_v1_mini", "NucleoNet"])
+    @pytest.mark.parametrize(("test_args", "expected_labels"), gen_vol_dset_params(),
+            ids=["MitoNet", "DropNet", "NucleoNet", "MitoNetMini"])
     def test_volume_stack_inference_benchmark(self, make_napari_viewer_proxy, tutorial_3d_image, test_args, benchmark):
         viewer = make_napari_viewer_proxy()
         image_layer = viewer.add_image(tutorial_3d_image)
@@ -75,16 +67,9 @@ class TestVolumeInferenceStack:
         benchmark(inference_config.config_and_run_inference, use_thread=False)
 
 
-class TestVolumeInferenceOrthoplane:        
-
-    @pytest.mark.parametrize("test_args",
-    [
-        ({"model_config":MODEL_NAMES[0]}),
-        ({"model_config":MODEL_NAMES[1]}),
-        ({"model_config":MODEL_NAMES[2]}),
-        ({"model_config":MODEL_NAMES[3]})],
-         ids=["DropNet", "MitoNet", "MitoNet_v1_mini", "NucleoNet"])
-    def test_volume_stack_inference_benchmark(self, make_napari_viewer_proxy, tutorial_3d_image, test_args, benchmark):
+    @pytest.mark.parametrize(("test_args", "expected_labels"), gen_ortho_dset_params(),
+            ids=["MitoNet", "DropNet", "NucleoNet", "MitoNetMini"])
+    def test_volume_orthoplane_inference_benchmark(self, make_napari_viewer_proxy, tutorial_3d_image, test_args, benchmark):
         viewer = make_napari_viewer_proxy()
         image_layer = viewer.add_image(tutorial_3d_image)
         inference_config = VolumeInferenceWidget(viewer=viewer,

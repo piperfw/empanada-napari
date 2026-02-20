@@ -1,4 +1,5 @@
 import os
+import time
 import napari
 from napari import Viewer
 from napari.layers import Image
@@ -9,18 +10,24 @@ from qtpy.QtWidgets import QScrollArea
 
 import zarr
 import dask.array as da
+import torch
 from torch.cuda import device_count
+from torch.backends.quantized import engine, supported_engines
 from empanada_napari.inference import Engine3d, tracker_consensus, stack_postprocessing
 from empanada_napari.multigpu import MultiGPUEngine3d
 from empanada_napari.utils import get_configs, abspath
 from empanada.config_loaders import read_yaml
 
+quantized_supported = True
+if engine in (None or 'none'):
+    quantized_supported = False
+
 class VolumeInferenceWidget:
     def __init__(self, 
+            image_layer: Image,
             model_config: str,
             viewer: Viewer = None,
             label_head: dict = None,
-            image_layer: Image = None,
             use_gpu: bool = False,
             use_quantized: bool = False,
             multigpu: bool = False,
@@ -80,7 +87,7 @@ class VolumeInferenceWidget:
         self.pixel_vote_thr = pixel_vote_thr
         self.allow_one_view = allow_one_view
 
-        self.store_dir = store_dir
+        self.store_dir = str(store_dir)
         self.last_config = None
         self.engine = None
 
@@ -91,6 +98,7 @@ class VolumeInferenceWidget:
             assert len(chunk_size) == 3, f"Chunk size must be 1 or 3 integers, got {chunk_size}"
             self.chunk_size = tuple(int(s) for s in chunk_size)
         
+        self._check_option_compatibility()
         self.pbar = pbar
 
 # ---------------- Option handling & inference running entrypoint ----------------
@@ -136,13 +144,12 @@ class VolumeInferenceWidget:
         # if use_thread is False, use the non-threaded versions of orthoplane + stack
             case True, True:
                 worker = self.orthoplane_inference(self.engine, image)
-                worker.yielded.connect(self._new_segmentation)
-                worker.returned.connect(self.start_consensus_worker)
+                worker.returned.connect(lambda result: self.start_consensus_worker(*result))
                 worker.start()
 
             case True, False: # For testing orthoplane inference
-                trackers_dict = self._orthoplane_inference(self.engine, image)
-                return trackers_dict
+                trackers_dict, axes_dict = self._orthoplane_inference(self.engine, image)
+                return axes_dict
 
             case False, True:
                 worker = self.stack_inference(self.engine, image, self.inference_plane)
@@ -158,12 +165,12 @@ class VolumeInferenceWidget:
 
 # ---------------- Engine management ----------------
     def get_engine(self):
-        update_engine = (
+        reload_engine = (
             self.engine is None
             or self.last_config != self.model_config_name
         )
 
-        if update_engine:
+        if reload_engine:
             self.engine = Engine3d(
                 self.model_config,
                 inference_scale=self.downsampling,
@@ -230,6 +237,16 @@ class VolumeInferenceWidget:
         return
 
 # ---------------- Helper methods ----------------
+    def _check_option_compatibility(self):
+        if quantized_supported == False and self.use_quantized:
+            raise RuntimeWarning(
+                "No quantized backend is selected. " \
+                f"torch.backends.quantized.engine = {engine}" \
+                "Using Quantized Model may fail."
+            )
+    
+        return
+    
     def _new_layers(self, mask, description, instances=None):
         metadata = {}
         if instances is not None:
@@ -289,14 +306,19 @@ class VolumeInferenceWidget:
         postprocess_worker.yielded.connect(self._new_class_stack)
         postprocess_worker.start()
 
-    def start_consensus_worker(self, trackers_dict):
+    def start_consensus_worker(self, trackers_dict, axes_dict):
+        # Add all the xy, xz, yz layers to napari:
+        for axis_name, mask in axes_dict.items():
+            self._new_segmentation((mask, axis_name))
+
+        # get consensus stack from the trackers_dict
         consensus_worker = tracker_consensus(
             trackers_dict, self.store_url, self.model_config, label_divisor=self.maximum_objects_per_class,
             pixel_vote_thr=self.pixel_vote_thr, allow_one_view=self.allow_one_view,
             min_size=self.min_size, min_extent=self.min_extent, dtype=self.engine.dtype,
             chunk_size=self.chunk_size
         )
-        consensus_worker.yielded.connect(self._new_class_stack)
+        consensus_worker.yielded.connect(self._new_class_stack) # supposed to add consensus as layer
         consensus_worker.start()
 
     # ---------------- Inference runners ----------------
@@ -315,17 +337,17 @@ class VolumeInferenceWidget:
 
     def _orthoplane_inference(self, engine, volume):
         trackers_dict = {}
+        axes_dict = {}
         for axis_name in ['xy', 'xz', 'yz']:
             stack, trackers = engine.infer_on_axis(volume, axis_name)
             trackers_dict[axis_name] = trackers
+            
             # report instances per class
             for tracker in trackers:
                 class_id = tracker.class_id
                 print(f'Class {class_id}, axis {axis_name}, has {len(tracker.instances.keys())} instances')
-            yield stack, axis_name
-        return trackers_dict
-
-
+            axes_dict[axis_name] = stack
+        return trackers_dict, axes_dict
 
 def volume_inference_widget():
     # Import when users activate plugin
@@ -345,7 +367,7 @@ def volume_inference_widget():
                           value=list(model_configs.keys())[0], tooltip='Model to use for inference'),
         use_gpu=dict(widget_type='CheckBox', text='Use GPU', value=device_count() >= 1,
                      tooltip='If checked, run on GPU 0'),
-        use_quantized=dict(widget_type='CheckBox', text='Use quantized model', value=device_count() == 0,
+        use_quantized=dict(widget_type='CheckBox', text='Use quantized model', value=device_count()==0 and quantized_supported,
                            tooltip='If checked, use the quantized model for faster CPU inference.'),
         multigpu=dict(widget_type='CheckBox', text='Multi GPU', value=False,
                       tooltip='If checked, run on all available GPUs'),
