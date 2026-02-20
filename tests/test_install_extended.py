@@ -1,26 +1,9 @@
-import torch
 import pytest
-import subprocess
-from importlib.metadata import distributions
-_NAME = "empanada-napari"
+import torch
 
-def test_module_is_installed():
-    packages = [dist.metadata.get("Name") for dist in distributions()]
-    assert _NAME in packages
-    assert "torch" in packages
-    assert "napari" in packages
-
-def test_nvidia_driver_available():
-    result = subprocess.check_output(["nvidia-smi"])
-    assert "CUDA" in str(result)
-
-@pytest.mark.dependency()
-def test_torch_can_access_GPU():
-    assert torch.version.cuda is not None, "PyTorch not built with CUDA"
-    assert torch.cuda.is_available(), "CUDA GPU not available; Empanada will run on CPU"
-    
-@pytest.mark.dependency(depends=["test_torch_can_access_GPU"])
-def assert_cuda_usable():
+@pytest.mark.dependency(depends=["test_install.py::test_torch_cuda_available"])
+def test_cuda_usable():
+    """Verify CUDA runtime actually works"""
     try:
         x = torch.tensor([1.0], device="cuda")
         y = x * 2
@@ -56,6 +39,4 @@ def test_model_uses_correct_device(use_quantized, use_gpu):
         assert param_device.type == "cpu"
     else:
         assert param_device.type == "cuda"
-        
-
 
