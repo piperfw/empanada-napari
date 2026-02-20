@@ -1,11 +1,19 @@
 import os
 import re
+import pytest
 from empanada_napari.utils import get_configs
 
-'''Set environmental variables for integration & benchmark tests to run headlessly/without OpenGL'''
-# os.environ["QT_QPA_PLATFORM"] = "offscreen"
-# os.environ.pop("DISPLAY", None)
-# os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
+'''Skip Benchmarking Tests unless specifically called'''
+def pytest_collection_modifyitems(config, items):
+# def skip_benchmark_tests(config, items):
+    marker_expr = config.getoption("-m")
+    # If -m wasn't given OR it doesn't mention "benchmark"
+    if not marker_expr or "benchmark" not in marker_expr:
+        skip_bench = pytest.mark.skip(reason="use `-m benchmark` to run benchmark tests")
+
+        for item in items:
+            if "benchmark" in item.keywords:
+                item.add_marker(skip_bench)
 
 
 '''Generate Parameters For test_button_widgets inference tests & benchmarking'''
