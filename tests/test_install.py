@@ -1,7 +1,8 @@
+import os
 import pytest
 import subprocess
 from importlib.metadata import distributions
-
+    
 def pytest_report_header(config):
     import datetime
     import platform
@@ -27,6 +28,7 @@ def test_module_imports():
     except ImportError as e:
         pytest.fail(f"Failed to import required module: {e}")
 
+@pytest.mark.gpu
 @pytest.mark.dependency(name="nvidia_driver")
 def test_nvidia_driver_available():
     try:
@@ -39,6 +41,7 @@ def test_nvidia_driver_available():
     except Exception as e:
         pytest.fail(f"NVIDIA driver not found ({e}) - GPU acceleration unavailable")
 
+@pytest.mark.gpu
 @pytest.mark.dependency()
 def test_torch_cuda_available():
     import torch
@@ -51,7 +54,10 @@ def test_torch_cuda_available():
     print(f"\nPyTorch CUDA version: {torch.version.cuda}")
     print(f"CUDA devices available: {torch.cuda.device_count()}")
 
+
 def test_display_set():
     import os
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        pytest.skip("Skipping in GitHub Actions")
     if not os.environ.get("DISPLAY"):
         pytest.fail("DISPLAY unset - napari GUI unavailable")

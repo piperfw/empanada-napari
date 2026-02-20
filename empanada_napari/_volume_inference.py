@@ -240,11 +240,9 @@ class VolumeInferenceWidget:
     def _check_option_compatibility(self):
         if quantized_supported == False and self.use_quantized:
             raise RuntimeWarning(
-                "No quantized backend is selected. " \
-                f"torch.backends.quantized.engine = {engine}" \
-                "Using Quantized Model may fail."
+                f" No quantized backend is selected. torch.backends.quantized.engine = {engine} Using Quantized Model may fail."
             )
-    
+
         return
     
     def _new_layers(self, mask, description, instances=None):
