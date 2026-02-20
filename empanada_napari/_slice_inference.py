@@ -290,7 +290,7 @@ class SliceInferenceWidget:
     def _check_option_compatibility(self):
         if quantized_supported == False and self.using_quantized:
             raise RuntimeWarning(
-                "No quantized backend is selected. " \
+                "\nNo quantized backend is selected. " \
                 f"torch.backends.quantized.engine = {engine}" \
                 "Using Quantized Model may fail."
             )
