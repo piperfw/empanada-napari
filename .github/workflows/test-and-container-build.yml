@@ -39,6 +39,7 @@ jobs:
       - name: Run Tests
         env:
           PLATFORM: ${{ matrix.platform }}
+          QT_QPA_PLATFORM: offscreen
         run: |
           python -m pytest -s -vv tests
           # Kill any lingering napari or python GUI processes 
