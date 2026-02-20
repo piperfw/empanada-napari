@@ -35,3 +35,9 @@ __all__ = [
     'export_batch_segs_widget',
     'label_counter_widget'
 ]
+
+import torch
+
+if torch.backends.quantized.engine in (None or 'none'):
+    if 'qnnpack' in torch.backends.quantized.supported_engines:
+        torch.backends.quantized.engine = 'qnnpack'
