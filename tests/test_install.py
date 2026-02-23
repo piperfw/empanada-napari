@@ -1,4 +1,4 @@
-import os
+import os, re, warnings
 import pytest
 import subprocess
 from importlib.metadata import distributions
@@ -61,3 +61,31 @@ def test_display_set():
         pytest.skip("Skipping in GitHub Actions")
     if not os.environ.get("DISPLAY"):
         pytest.fail("DISPLAY unset - napari GUI unavailable")
+
+def test_host_mounts_accessible():
+    # Non-User Filesystems and mount points that existed in Linux docker container
+    # Transferability to other runtimes and host systems not guaranteed
+    EXCLUDE_FSTYPES = {"overlay", "proc", "tmpfs", "devpts", "sysfs",
+                       "cgroup", "cgroup2", "mqueue", "devtmpfs"}
+    EXCLUDE_MOUNTPOINTS = re.compile(r"^(/etc/|/proc|/sys|/dev)")
+    with open("/proc/mounts") as f:
+        for line in f:
+            _, mountpoint, fstype, *_ = line.split()
+            if fstype in EXCLUDE_FSTYPES:
+                continue
+            if EXCLUDE_MOUNTPOINTS.match(mountpoint):
+                continue
+            # Check read access (N.B. moot if container run as root)
+            if not os.access(mountpoint, os.R_OK):
+                warnings.warn(f"Mountpoint {mountpoint} ({fstype}) is not readable")
+                continue
+            # Check write access
+            if not os.access(mountpoint, os.R_OK):
+                warnings.warn(f"Mountpoint {mountpoint} ({fstype}) is not writeable")
+                continue
+            warnings.warn(f"Found a plausible Mountpoint: {mountpoint} ({fstype})")
+            return  # plausible filesystem r+w mount 
+    pytest.fail(
+        "No host filesystems detected with read+write access"
+        "You may need to bind mount data with -v /host/path:/container/path"
+    )

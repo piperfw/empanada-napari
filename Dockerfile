@@ -49,10 +49,8 @@ ARG PYTHON_VERSION="3.12.9" # https://www.python.org/ftp/python/3.12.9/
 ARG PYTHON_RELEASE_MANAGER="thomas@python.org" # https://www.python.org/downloads/metadata/sigstore/
 ARG PYTHON_OIDC_ISSUER="https://accounts.google.com" # https://www.python.org/downloads/metadata/sigstore/
 ARG PIP_VERSION="25.1.1" # https://pypi.org/project/pip/
-ARG NAPARI_VERSION="0.4.18" # https://empanada.readthedocs.io/en/latest/index.html 
 ARG PYTEST_VERSION="8.4.1" # https://pypi.org/project/pytest/#history
 ARG PYTEST_DEPENDENCY_VERSION="0.5.1" # https://pypi.org/project/pytest-dependency/#history
-ARG EMPANADA_VERSION="1.2" # https://pypi.org/project/empanada-napari/
 ARG LOCAL_BUILD=false # Build from dist/*.whl rather than pulling latest empanada
 
 # NAPARI Requirements from: https://github.com/napari/napari/blob/v0.4.18x/dockerfile
@@ -196,7 +194,7 @@ RUN PYTHON_SHORT=$(echo ${PYTHON_VERSION} | cut -d. -f1,2) \
 
 ENV PATH="$PATH:/usr/local/bin"
 
-# Upgrading pip
+# Upgrading pip and setuptools build dependency
 RUN python -m pip install --no-cache-dir --upgrade pip==${PIP_VERSION}
 
 # N.B. Need a local dist/ directory (empty unless LOCAL_BUILD)
@@ -205,7 +203,9 @@ COPY dist/ dist/
 # Installing Napari + Empanada (local or PyPI)
 ARG LOCAL_BUILD=false
 RUN if [ "$LOCAL_BUILD" = "true" ]; then \
-        python -m pip install --no-cache-dir dist/*.whl; \
+        python -m pip install --no-cache-dir \
+			dist/*.whl \
+			PyQt5; \
     else \
         python -m pip install --no-cache-dir \
             empanada-napari \
