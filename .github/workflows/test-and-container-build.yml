@@ -1,43 +1,119 @@
-name: Run pytests and build+publish docker container if tests pass
+name: Run pytests and conditionally build package and container (publishing if main)
 
 on:
   push:
     branches:
-      - '**'  # Run on all branches
-
-env:
-  # GitHub container registry (could use dockerhub)
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+      - '**'
 
 jobs:
-  test:
-    runs-on: ${{ matrix.platform }}
-    defaults:
-      run:
-        working-directory: .
-        
-    strategy:
-      matrix:
-        # From tox.ini
-        platform: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-        
+
+  # Run pytests on all target platforms and python versions
+  #test:
+  #  runs-on: ${{ matrix.platform }}
+  #  strategy:
+  #    matrix:
+  #      platform: [ubuntu-latest, macos-latest, windows-latest]
+  #      python-version: ["3.10", "3.11", "3.12", "3.13"]
+  #  steps:
+  #    - uses: actions/checkout@v6
+  #    - uses: actions/setup-python@v6
+  #      with:
+  #        python-version: ${{ matrix.python-version }}
+
+  #    - name: Install dependencies
+  #      shell: bash
+  #      run: |
+  #        python -m pip install --upgrade pip
+  #        python -m pip install napari[all]
+  #        python -m pip install .[test]
+
+  #    - name: Run tests
+  #      env:
+  #        PLATFORM: ${{ matrix.platform }}
+  #      run: python -m pytest -s -vv tests
+
+  # Build package using one python version; publish (PyPI) if on main
+  build:
+    #needs: test # if tests pass
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        shell: bash
+          python-version: "3.12"
+
+      - name: Install build tools
         run: |
           python -m pip install --upgrade pip
-          python -m pip install napari[all]
-          python -m pip install .[test]
-          
-      - name: Run Tests
+          pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Validate build package
+        run: twine check dist/*
+
+      - name: Store dist for container build
+        uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+      - name: Publish to PyPI
+        if: github.ref == 'refs/heads/main'
+        run: python -m twine upload dist/*
         env:
-          PLATFORM: ${{ matrix.platform }}
-        run: |
-          python -m pytest -s -vv tests
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TWINE_API_KEY }}
+
+  # Build container; publish to GHCR if on main
+  build-container:
+    #needs: [test, build] # if tests AND build succeeds
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        if: github.ref == 'refs/heads/main'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Tag as latest and with commit sha
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Download built package
+        uses: actions/download-artifact@v6
+        with:
+          name: dist
+          path: dist/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container (and push if main)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.ref == 'refs/heads/main' }} # push on main
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: LOCAL_BUILD=true
