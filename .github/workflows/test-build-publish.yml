@@ -8,33 +8,33 @@ on:
 jobs:
 
   # Run pytests on all target platforms and python versions
-  #test:
-  #  runs-on: ${{ matrix.platform }}
-  #  strategy:
-  #    matrix:
-  #      platform: [ubuntu-latest, macos-latest, windows-latest]
-  #      python-version: ["3.10", "3.11", "3.12", "3.13"]
-  #  steps:
-  #    - uses: actions/checkout@v6
-  #    - uses: actions/setup-python@v6
-  #      with:
-  #        python-version: ${{ matrix.python-version }}
+  test:
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      matrix:
+        platform: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
 
-  #    - name: Install dependencies
-  #      shell: bash
-  #      run: |
-  #        python -m pip install --upgrade pip
-  #        python -m pip install napari[all]
-  #        python -m pip install .[test]
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install napari[all]
+          python -m pip install .[test]
 
-  #    - name: Run tests
-  #      env:
-  #        PLATFORM: ${{ matrix.platform }}
-  #      run: python -m pytest -s -vv tests
+      - name: Run tests
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: python -m pytest -s -vv tests
 
   # Build package using one python version; publish (PyPI) if on main
   build:
-    #needs: test # if tests pass
+    needs: test # if tests pass
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -60,17 +60,16 @@ jobs:
           path: dist/
           retention-days: 1
 
-      - name: Publish to PyPI
-        if: github.ref == 'refs/heads/main'
-        run: python -m twine upload dist/*
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.TWINE_API_KEY }}
+      #- name: Publish to PyPI
+      #  if: github.ref == 'refs/heads/main'
+      #  run: python -m twine upload dist/*
+      #  env:
+      #    TWINE_USERNAME: __token__
+      #    TWINE_PASSWORD: ${{ secrets.TWINE_API_KEY }}
 
   # Build container; publish to GHCR if on main
   build-container:
-    #needs: [test, build] # if tests AND build succeeds
-    needs: build
+    needs: [test, build] # if tests AND build succeeds
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -114,7 +113,7 @@ jobs:
         with:
           context: .
           outputs: ${{ github.ref == 'refs/heads/main' && 'type=docker,type=registry' || 'type=docker' }}
-          tags: ${{ steps.meta.outputs.tags || 'smoke-test:latest' }}
+          tags: ${{ steps.meta.outputs.tags || 'empanada-napari:ci' }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: LOCAL_BUILD=true
 
@@ -126,7 +125,12 @@ jobs:
           Xvfb :99 -screen 0 1024x768x24 &
           sleep 1
           DISPLAY=:99 xhost +local:
-          docker run --rm \
+          mkdir -p ${{ github.workspace }}/test-data
+          mkdir -p /tmp/runtime-dir
+          # timeout exits with 124 after 60s (napari launches and runs indefinitely)
+          timeout -s 9 60 docker run --rm \
             -e DISPLAY=:99 \
+            -e XDG_RUNTIME_DIR=/tmp/runtime-dir \
             -v /tmp/.X11-unix:/tmp/.X11-unix \
-            ${{ steps.meta.outputs.tags || 'smoke-test:latest' }}
+            -v ${{ github.workspace }}/test-data:/test-data \
+            ${{ steps.meta.outputs.tags || 'empanada-napari:ci' }} || [ $? -eq 137 ]

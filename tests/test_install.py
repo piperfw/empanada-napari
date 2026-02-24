@@ -83,7 +83,6 @@ def test_host_mounts_accessible():
             if not os.access(mountpoint, os.R_OK):
                 warnings.warn(f"Mountpoint {mountpoint} ({fstype}) is not writeable")
                 continue
-            warnings.warn(f"Found a plausible Mountpoint: {mountpoint} ({fstype})")
             return  # plausible filesystem r+w mount 
     pytest.fail(
         "No host filesystems detected with read+write access"
