@@ -56,9 +56,6 @@ def test_torch_cuda_available():
 
 
 def test_display_set():
-    import os
-    if os.getenv("GITHUB_ACTIONS") == "true":
-        pytest.skip("Skipping in GitHub Actions")
     if not os.environ.get("DISPLAY"):
         pytest.fail("DISPLAY unset - napari GUI unavailable")
 

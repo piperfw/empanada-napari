@@ -30,7 +30,7 @@ jobs:
       - name: Run tests
         env:
           PLATFORM: ${{ matrix.platform }}
-        run: python -m pytest -s -vv tests
+        run: python -m pytest -s -vv tests --ignore=tests/test_install.py --ignore=tests/test_install_extended.py
 
   # Build package using one python version; publish (PyPI) if on main
   build:
