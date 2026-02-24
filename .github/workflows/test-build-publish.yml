@@ -1,0 +1,136 @@
+name: Run pytests and conditionally build package and container (publishing if main)
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+
+  # Run pytests on all target platforms and python versions
+  test:
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      matrix:
+        platform: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install napari[all]
+          python -m pip install .[test]
+
+      - name: Run tests
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: python -m pytest -s -vv tests --ignore=tests/test_install.py --ignore=tests/test_install_extended.py
+
+  # Build package using one python version; publish (PyPI) if on main
+  build:
+    needs: test # if tests pass
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Validate build package
+        run: twine check dist/*
+
+      - name: Store dist for container build
+        uses: actions/upload-artifact@v6
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
+      #- name: Publish to PyPI
+      #  if: github.ref == 'refs/heads/main'
+      #  run: python -m twine upload dist/*
+      #  env:
+      #    TWINE_USERNAME: __token__
+      #    TWINE_PASSWORD: ${{ secrets.TWINE_API_KEY }}
+
+  # Build container; publish to GHCR if on main
+  build-container:
+    needs: [test, build] # if tests AND build succeeds
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        if: github.ref == 'refs/heads/main'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Tag as latest and with commit sha
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Download built package
+        uses: actions/download-artifact@v6
+        with:
+          name: dist
+          path: dist/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container (and push if main)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          outputs: ${{ github.ref == 'refs/heads/main' && 'type=docker,type=registry' || 'type=docker' }}
+          tags: ${{ steps.meta.outputs.tags || 'empanada-napari:ci' }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: LOCAL_BUILD=true
+
+      - name: Install Xvfb and utils so napari GUI can run in a virt X server
+        run: sudo apt-get install -y xvfb x11-xserver-utils
+
+      - name: Container start-up test
+        run: |
+          Xvfb :99 -screen 0 1024x768x24 &
+          sleep 1
+          DISPLAY=:99 xhost +local:
+          mkdir -p ${{ github.workspace }}/test-data
+          mkdir -p /tmp/runtime-dir
+          # timeout exits with 124 after 60s (napari launches and runs indefinitely)
+          timeout -s 9 60 docker run --rm \
+            -e DISPLAY=:99 \
+            -e XDG_RUNTIME_DIR=/tmp/runtime-dir \
+            -v /tmp/.X11-unix:/tmp/.X11-unix \
+            -v ${{ github.workspace }}/test-data:/test-data \
+            ${{ steps.meta.outputs.tags || 'empanada-napari:ci' }} || [ $? -eq 137 ]

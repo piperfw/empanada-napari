@@ -18,7 +18,6 @@ ARG TUF_VERSION="v0.7.0" # https://pkg.go.dev/github.com/theupdateframework/go-t
 ARG COSIGN_VERSION="v2.5.0" # https://github.com/sigstore/cosign/releases
 
 # Python Requirements from (https://devguide.python.org/getting-started/setup-building/#install-dependencies)
-ARG PYTHON_VERSION="3.9.21" # https://pypi.org/project/empanada-napari/ requires python3.9
 ARG BUILD_ESSENTIAL_VERSION="12.10ubuntu1" # https://packages.ubuntu.com/noble/build-essential
 ARG GDB_VERSION="15.0.50.20240403-0ubuntu1" # https://packages.ubuntu.com/noble/gdb
 ARG LCOV_VERSION="2.0-4ubuntu2" # https://packages.ubuntu.com/noble/lcov
@@ -46,11 +45,13 @@ ARG ZLIB1G_DEV_VERSION="1:1.3.dfsg-3.1ubuntu2.1" # https://packages.ubuntu.com/n
 ARG LIBZSTD_DEV_VERSION="1.5.5+dfsg2-2build1.1" # https://packages.ubuntu.com/noble-updates/libzstd-dev
 
 #Python Requirements
+ARG PYTHON_VERSION="3.12.9" # https://www.python.org/ftp/python/3.12.9/
+ARG PYTHON_RELEASE_MANAGER="thomas@python.org" # https://www.python.org/downloads/metadata/sigstore/
+ARG PYTHON_OIDC_ISSUER="https://accounts.google.com" # https://www.python.org/downloads/metadata/sigstore/
 ARG PIP_VERSION="25.1.1" # https://pypi.org/project/pip/
-ARG EMPANADA_VERSION="1.2" # https://pypi.org/project/empanada-napari/
-ARG NAPARI_VERSION="0.4.18" # https://empanada.readthedocs.io/en/latest/index.html 
 ARG PYTEST_VERSION="8.4.1" # https://pypi.org/project/pytest/#history
 ARG PYTEST_DEPENDENCY_VERSION="0.5.1" # https://pypi.org/project/pytest-dependency/#history
+ARG LOCAL_BUILD=false # Build from dist/*.whl rather than pulling latest empanada
 
 # NAPARI Requirements from: https://github.com/napari/napari/blob/v0.4.18x/dockerfile
 ARG MESA_UTILS_VERSION="9.0.0-2" # https://packages.ubuntu.com/noble/mesa-utils
@@ -58,7 +59,7 @@ ARG X11_UTILS_VERSION="7.7+6build2" # https://packages.ubuntu.com/noble/x11-util
 ARG LIBOPENGL0_VERSION="1.7.0-1build1" # https://packages.ubuntu.com/noble/libopengl0
 ARG LIBGL1_VERSION="1.7.0-1build1" # https://packages.ubuntu.com/noble/libgl1
 ARG LIBGLX_MESA0_VERSION="25.2.8-0ubuntu0.24.04.1" # https://packages.ubuntu.com/noble-updates/libglx-mesa0
-ARG LIBGLIB2_0_0T64_VERSION="2.80.0-6ubuntu3.7" # https://packages.ubuntu.com/noble/libglib2.0-0t64
+ARG LIBGLIB2_0_0T64_VERSION="2.80.0-6ubuntu3.8" # https://packages.ubuntu.com/noble/libglib2.0-0t64
 ARG LIBFONTCONFIG1_VERSION="2.15.0-1.1ubuntu2" # https://packages.ubuntu.com/noble/libfontconfig1
 ARG LIBXRENDER1_VERSION="1:0.9.10-1.1build1" # https://packages.ubuntu.com/noble/libxrender1
 ARG LIBDBUS_1_3_VERSION="1.14.10-4ubuntu4" # https://packages.ubuntu.com/noble/libdbus-1-3
@@ -142,8 +143,8 @@ RUN curl -o Python-${PYTHON_VERSION}.tar.xz.sigstore -L "https://www.python.org/
     # Verifiy Python is secure.
     && cosign verify-blob Python-${PYTHON_VERSION}.tar.xz \
         --bundle Python-${PYTHON_VERSION}.tar.xz.sigstore \
-        --cert-identity lukasz@langa.pl \
-        --cert-oidc-issuer "https://github.com/login/oauth" \
+        --cert-identity ${PYTHON_RELEASE_MANAGER} \
+        --cert-oidc-issuer ${PYTHON_OIDC_ISSUER} \ 
         && tar -xf Python-${PYTHON_VERSION}.tar.xz Python-${PYTHON_VERSION}/ \ 
         && rm Python-${PYTHON_VERSION}.tar.xz
 
@@ -157,9 +158,8 @@ RUN rm /usr/bin/cosign  \
         curl
 
 WORKDIR /opt/Python-${PYTHON_VERSION}
-# Configure Python
-RUN ./configure --enable-shared --enable-optimizations --with-lto --prefix=/usr/local LDFLAGS="-Wl,--rpath=/usr/local/lib" \
-    # Install Python
+# Configure and install Python
+RUN ./configure --enable-shared --with-lto --prefix=/usr/local LDFLAGS="-Wl,--rpath=/usr/local/lib" \
     && make install --jobs $(nproc)
 
 # Napari Requirements
@@ -188,11 +188,32 @@ RUN apt-get -y update && apt-get  install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrading pip
-RUN python3.9 -m pip install --no-cache-dir --upgrade pip==${PIP_VERSION} \
-    && python3.9 -m pip install --no-cache-dir \ 
-    napari[all]==${NAPARI_VERSION} \
-    empanada-napari==${EMPANADA_VERSION} \
+# Symlink python
+RUN PYTHON_SHORT=$(echo ${PYTHON_VERSION} | cut -d. -f1,2) \
+    && ln -s /usr/local/bin/python${PYTHON_SHORT} /usr/local/bin/python
+
+ENV PATH="$PATH:/usr/local/bin"
+
+# Upgrading pip and setuptools build dependency
+RUN python -m pip install --no-cache-dir --upgrade pip==${PIP_VERSION}
+
+# N.B. Need a local dist/ directory (empty unless LOCAL_BUILD)
+COPY dist/ dist/
+
+# Installing Napari + Empanada (local or PyPI)
+ARG LOCAL_BUILD=false
+RUN if [ "$LOCAL_BUILD" = "true" ]; then \
+        python -m pip install --no-cache-dir \
+			dist/*.whl \
+			PyQt5; \
+    else \
+        python -m pip install --no-cache-dir \
+            empanada-napari \
+            napari[all]; \
+    fi
+
+# Install test dependencies 
+RUN python -m pip install --no-cache-dir \
 	pytest==${PYTEST_VERSION} \
 	pytest-dependency==${PYTEST_DEPENDENCY_VERSION}
 
@@ -200,7 +221,5 @@ RUN python3.9 -m pip install --no-cache-dir --upgrade pip==${PIP_VERSION} \
 COPY tests/ /tests/
 RUN chmod +x /tests/run_container_tests.sh
 
-ENV PATH="$PATH:/usr/local/bin"
-RUN ln -s /usr/local/bin/python3.9 /usr/local/bin/python
 # Run tests and start napari
-CMD ["/bin/bash", "-c", "/tests/run_container_tests.sh && python3.9 -m napari"]
+CMD ["/bin/bash", "-c", "/tests/run_container_tests.sh && python -m napari"]
