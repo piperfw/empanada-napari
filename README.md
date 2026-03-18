@@ -1,7 +1,7 @@
 # container-test branch
 Build the container from root of repository:
 ```
-docker build -t empanada-napari:test .
+docker build -t empanada-napari:test --build-arg LOCAL_BUILD=true .
 ```
 Run the container (entrypoint includes `tests/run_container_tests.sh`):
 ```
