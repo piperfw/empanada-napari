@@ -10,7 +10,7 @@ FROM ubuntu:${UBUNTU_VERSION}
 ##########################################
 
 # Requirements to Verify Python Install
-ARG CURL_VERSION="8.5.0-2ubuntu10.6" # https://packages.ubuntu.com/noble/curl
+ARG CURL_VERSION="8.5.0-2ubuntu10.8" # https://packages.ubuntu.com/noble/curl
 ARG CA_CERTIFICATES_VERSION="20240203" # https://packages.ubuntu.com/noble/ca-certificates
 ARG GOLANG_GO_VERSION="2:1.22~2build1" # https://packages.ubuntu.com/noble/golang-go
 ARG TAR_VERSION="1.35+dfsg-3build1" # https://packages.ubuntu.com/noble/tar
@@ -40,7 +40,7 @@ ARG TK_DEV_VERSION="8.6.14build1" # https://packages.ubuntu.com/noble/tk-dev
 ARG LZMA_VERSION="9.22-2.2" # https://packages.ubuntu.com/noble/lzma
 ARG LIBBZ2_DEV_VERSION="1.0.8-5.1build0.1" # https://packages.ubuntu.com/noble/libbz2-dev # After testing required to add build0.1
 ARG TK_DEV_VERSION="8.6.14build1" # https://packages.ubuntu.com/noble/tk-dev
-ARG UUID_DEV_VERSION="2.39.3-9ubuntu6.4" # https://packages.ubuntu.com/noble-updates/uuid-dev
+ARG UUID_DEV_VERSION="2.39.3-9ubuntu6.5" # https://packages.ubuntu.com/noble-updates/uuid-dev
 ARG ZLIB1G_DEV_VERSION="1:1.3.dfsg-3.1ubuntu2.1" # https://packages.ubuntu.com/noble-updates/zlib1g-dev
 ARG LIBZSTD_DEV_VERSION="1.5.5+dfsg2-2build1.1" # https://packages.ubuntu.com/noble-updates/libzstd-dev
 
