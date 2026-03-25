@@ -57,12 +57,12 @@ Volume EM datasets for benchmarking mitochondrial instance segmentation are avai
 If you've previously installed and used conda, it's recommended (but optional) to create a new virtual 
 environment in order to avoid dependency conflicts. 
 
-empanada-napari works with python=3.9 or lower
+empanada-napari works with python=3.10-3.12
 
 It's recommended to have installed napari through [conda](https://docs.conda.io/en/latest/miniconda.html). Then to install this plugin:
 
 ```shell
-pip install empanada-napari==1.2
+pip install empanada-napari==1.2.2
 ```
 
 Launch napari:
