@@ -5,7 +5,9 @@ on:
     branches:
       - '**'
 
-jobs:
+jome: 
+
+
 
   # Run pytests on all target platforms and python versions
   test:
@@ -28,9 +30,24 @@ jobs:
           python -m pip install .[test]
 
       - name: Run tests
+        if: "!(matrix.platform == 'ubuntu-latest' && matrix.python-version == '3.12')"
         env:
-          PLATFORM: ${{ matrix.platform }}
+            PLATFORM: ${{ matrix.platform }}
         run: python -m pytest -s -vv tests --ignore=tests/test_install.py --ignore=tests/test_install_extended.py
+
+      - name: Run tests with coverage
+        if: matrix.platform == 'ubuntu-latest' && matrix.python-version == '3.12'
+        env:
+            PLATFORM: ${{ matrix.platform }}
+        run: python -m pytest -s -vv tests --ignore=tests/test_install.py --ignore=tests/test_install_extended.py --cov=empanada_napari --cov-report=xml
+
+      - name: Upload coverage to Codecov
+        if: matrix.platform == 'ubuntu-latest' && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+            token: ${{ secrets.CODECOV_TOKEN }}
+            files: ./coverage.xml
+            fail_ci_if_error: truebs:
 
   # Build package using one python version; publish (PyPI) if on main
   build:
