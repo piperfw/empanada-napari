@@ -26,12 +26,12 @@ ENV PATH="/opt/venv/bin:${PATH}" \
     QT_XCB_NO_MITSHM=1 \
     NAPARI_ASYNC=1
 
-# dist/ must exist in the build context and is used when LOCAL_BUILD=true,
+# container-dist/ must exist in the build context and is used when LOCAL_BUILD=true,
 # otherwise empanada-napari is installed from PyPI. Note in this case 
 # the package is installed separately *before* napari, to ensure the latest
 # version resolves. Additional test requirements are added in 
 # second install
-RUN --mount=type=bind,source=dist,target=/tmp/dist \
+RUN --mount=type=bind,source=container-dist,target=/tmp/dist \
     if [ "${LOCAL_BUILD}" = "true" ]; then \
         pip install --no-cache-dir /tmp/dist/*.whl; \
 	else \
