@@ -57,7 +57,10 @@ jobs:
             IMAGE_CREATED=${{ steps.meta.outputs.created }}
 
       - name: Container start-up tests (no GUI)
-        run: docker run --rm -e EXIT_STATUS=true empanada-napari:ci /tests/run_container_tests.sh
+        run: |
+          mkdir -p test-data
+          docker run --rm -e DISPLAY=:99 -v "${GITHUB_WORKSPACE}/test-data:/test-data" \
+            -e EXIT_ON_FAIL=true empanada-napari:ci /tests/run_container_tests.sh
 
       - name: Log in to GHCR
         if: github.ref == 'refs/heads/main'

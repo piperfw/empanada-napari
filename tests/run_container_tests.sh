@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Whether to exit on success/fail (CI only) - otherwise, information printed only
-EXIT_STATUS=${EXIT_ON_FAIL:-false}
+# Whether to exit 1 on fail (CI only) - otherwise, information printed only
+EXIT_ON_FAIL=${EXIT_ON_FAIL:-false}
 status=0
 # Whether to run a longer tests, if /tests/test_install_extended.py is provided
 EXTENDED_TESTS=${EXTENDED_TESTS:-false}
@@ -45,7 +45,7 @@ python -c "from empanada_napari.utils import get_configs; model_configs=get_conf
 echo ""
 
 # If not in CI, don't give an exit code which would stop CMD if non zero 
-if [ "$EXIT_STATUS" = "true" ]; then
+if [ "$EXIT_ON_FAIL" = "true" ]; then
 	exit "$status"
 fi
 

@@ -77,7 +77,7 @@ def test_host_mounts_accessible():
                 warnings.warn(f"Mountpoint {mountpoint} ({fstype}) is not readable")
                 continue
             # Check write access
-            if not os.access(mountpoint, os.R_OK):
+            if not os.access(mountpoint, os.W_OK):
                 warnings.warn(f"Mountpoint {mountpoint} ({fstype}) is not writeable")
                 continue
             return  # plausible filesystem r+w mount 
