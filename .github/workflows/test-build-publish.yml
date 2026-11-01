@@ -67,70 +67,95 @@ jobs:
       #    TWINE_USERNAME: __token__
       #    TWINE_PASSWORD: ${{ secrets.TWINE_API_KEY }}
 
-  # Build container; publish to GHCR if on main
+  # Build and test Ubuntu 24 container with Python 3.12
+  # On main: tag and push to GHCR, and sign
   build-container:
     needs: [test, build] # if tests AND build succeeds
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      id-token: write # keyless cosign signing (main only)
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v6
-
-      - name: Log in to GHCR
-        if: github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract image metadata
-        if: github.ref == 'refs/heads/main'
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Tag as latest and with commit sha
-          tags: |
-            type=raw,value=latest
-            type=sha,format=short
 
       - name: Download built package
         uses: actions/download-artifact@v6
         with:
           name: dist
-          path: dist/
+          path: container-dist/
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Work out image name, tags and version
+        id: meta
+        run: |
+          # GHCR requires a lower-case image name
+          image="${REGISTRY}/${GITHUB_REPOSITORY,,}"
+          # wheel filename: {name}-{version}-{python}-{abi}-{platform}.whl
+          version="$(basename container-dist/*.whl | cut -d- -f2 | tr '+' '-')"
+          {
+            echo "image=${image}"
+            echo "sha_tag=${image}:sha-${GITHUB_SHA::7}"
+            echo "version=${version}"
+            echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Build container (and push if main)
-        uses: docker/build-push-action@v6
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build container (local, for testing)
+        uses: docker/build-push-action@v7
         with:
           context: .
-          outputs: ${{ github.ref == 'refs/heads/main' && 'type=docker,type=registry' || 'type=docker' }}
-          tags: ${{ steps.meta.outputs.tags || 'empanada-napari:ci' }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: LOCAL_BUILD=true
+          load: true
+          provenance: false
+          sbom: false
+          tags: empanada-napari:ci
+          build-args: |
+            LOCAL_BUILD=true
+            IMAGE_VERSION=${{ steps.meta.outputs.version }}
+            IMAGE_REVISION=${{ github.sha }}
+            IMAGE_CREATED=${{ steps.meta.outputs.created }}
 
-      - name: Install Xvfb and utils so napari GUI can run in a virt X server
-        run: sudo apt-get install -y xvfb x11-xserver-utils
+      - name: Container start-up tests (no GUI)
+        run: docker run --rm -e EXIT_STATUS=true empanada-napari:ci /tests/run_container_tests.sh
 
-      - name: Container start-up test
-        run: |
-          Xvfb :99 -screen 0 1024x768x24 &
-          sleep 1
-          DISPLAY=:99 xhost +local:
-          mkdir -p ${{ github.workspace }}/test-data
-          mkdir -p /tmp/runtime-dir
-          # timeout exits with 124 after 60s (napari launches and runs indefinitely)
-          timeout -s 9 60 docker run --rm \
-            -e DISPLAY=:99 \
-            -e XDG_RUNTIME_DIR=/tmp/runtime-dir \
-            -v /tmp/.X11-unix:/tmp/.X11-unix \
-            -v ${{ github.workspace }}/test-data:/test-data \
-            ${{ steps.meta.outputs.tags || 'empanada-napari:ci' }} || [ $? -eq 137 ]
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Main only, after tests pass (use layers cached from above)
+      # Adds SBOM and provenance attestations tags
+      - name: Push container
+        id: push
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.meta.outputs.image }}:latest
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+          build-args: |
+            LOCAL_BUILD=true
+            IMAGE_VERSION=${{ steps.meta.outputs.version }}
+            IMAGE_REVISION=${{ github.sha }}
+            IMAGE_CREATED=${{ steps.meta.outputs.created }}
+ 
+      - name: Install cosign
+        if: github.ref == 'refs/heads/main'
+        uses: sigstore/cosign-installer@v4.1.0
+ 
+      - name: Sign image
+        if: github.ref == 'refs/heads/main'
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
