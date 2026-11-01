@@ -1,225 +1,62 @@
 ARG UBUNTU_VERSION=24.04
-
-ARG DEBIAN_FRONTEND=noninteractive
-ARG TZ=Europe/London
-
 FROM ubuntu:${UBUNTU_VERSION}
 
-##########################################
-# Arguments
-##########################################
-
-# Requirements to Verify Python Install
-ARG CURL_VERSION="8.5.0-2ubuntu10.8" # https://packages.ubuntu.com/noble/curl
-ARG CA_CERTIFICATES_VERSION="20240203" # https://packages.ubuntu.com/noble/ca-certificates
-ARG GOLANG_GO_VERSION="2:1.22~2build1" # https://packages.ubuntu.com/noble/golang-go
-ARG TAR_VERSION="1.35+dfsg-3build1" # https://packages.ubuntu.com/noble/tar
-ARG TUF_VERSION="v0.7.0" # https://pkg.go.dev/github.com/theupdateframework/go-tuf/cmd/tuf-client
-ARG COSIGN_VERSION="v2.5.0" # https://github.com/sigstore/cosign/releases
-
-# Python Requirements from (https://devguide.python.org/getting-started/setup-building/#install-dependencies)
-ARG BUILD_ESSENTIAL_VERSION="12.10ubuntu1" # https://packages.ubuntu.com/noble/build-essential
-ARG GDB_VERSION="15.0.50.20240403-0ubuntu1" # https://packages.ubuntu.com/noble/gdb
-ARG LCOV_VERSION="2.0-4ubuntu2" # https://packages.ubuntu.com/noble/lcov
-ARG PKG_CONFIG_VERSION="1.8.1-2build1" # https://packages.ubuntu.com/noble/pkg-config
-ARG LIBBZ2_DEV_VERSION="1.0.8-5.1build0.1" # https://packages.ubuntu.com/noble/libbz2-dev # After testing required to add build0.1
-ARG LIBFFI_DEV_VERSION="3.4.6-1build1" # https://packages.ubuntu.com/noble/libffi-dev
-ARG LIBGDBM_DEV_VERSION="1.23-5.1build1" # https://packages.ubuntu.com/noble/libgdbm-dev
-ARG LIBGDBM_COMPAT_DEV_VERSION="1.23-5.1build1" # https://packages.ubuntu.com/noble/libgdbm-compat-dev
-ARG LIBLZMA_DEV_VERSION="5.6.1+really5.4.5-1ubuntu0.2" # https://packages.ubuntu.com/noble/liblzma-dev
-# LIBNCURSES5 is not used as it is not supported on ubuntu 24.04 so libncurses-dev is used instead
-ARG LIBNCURSES_DEV_VERSION="6.4+20240113-1ubuntu2" # https://packages.ubuntu.com/noble/libncurses-dev
-# libreadline6-dev is a virtual package so no VERSION is provided however it is from libreadline-dev so this is specified instead
-# see https://packages.ubuntu.com/noble/libreadline6-dev
-ARG LIBREADLINE_DEV_VERSION="8.2-4build1" # https://packages.ubuntu.com/noble/libreadline-dev
-ARG LIBSQLITE3_DEV_VERSION="3.45.1-1ubuntu2.5" # https://packages.ubuntu.com/noble/libsqlite3-dev
-ARG LIBSSL_DEV_VERSION="3.0.13-0ubuntu3.7" # https://packages.ubuntu.com/noble/libssl-dev
-ARG LZMA_VERSION="9.22-2.2" # https://packages.ubuntu.com/noble/lzma
-ARG LZMA_DEV_VERSION="9.22-2.2" # https://packages.ubuntu.com/noble/lzma-dev
-ARG TK_DEV_VERSION="8.6.14build1" # https://packages.ubuntu.com/noble/tk-dev
-ARG LZMA_VERSION="9.22-2.2" # https://packages.ubuntu.com/noble/lzma
-ARG LIBBZ2_DEV_VERSION="1.0.8-5.1build0.1" # https://packages.ubuntu.com/noble/libbz2-dev # After testing required to add build0.1
-ARG TK_DEV_VERSION="8.6.14build1" # https://packages.ubuntu.com/noble/tk-dev
-ARG UUID_DEV_VERSION="2.39.3-9ubuntu6.5" # https://packages.ubuntu.com/noble-updates/uuid-dev
-ARG ZLIB1G_DEV_VERSION="1:1.3.dfsg-3.1ubuntu2.1" # https://packages.ubuntu.com/noble-updates/zlib1g-dev
-ARG LIBZSTD_DEV_VERSION="1.5.5+dfsg2-2build1.1" # https://packages.ubuntu.com/noble-updates/libzstd-dev
-
-#Python Requirements
-ARG PYTHON_VERSION="3.12.9" # https://www.python.org/ftp/python/3.12.9/
-ARG PYTHON_RELEASE_MANAGER="thomas@python.org" # https://www.python.org/downloads/metadata/sigstore/
-ARG PYTHON_OIDC_ISSUER="https://accounts.google.com" # https://www.python.org/downloads/metadata/sigstore/
-ARG PIP_VERSION="25.1.1" # https://pypi.org/project/pip/
-ARG PYTEST_VERSION="8.4.1" # https://pypi.org/project/pytest/#history
-ARG PYTEST_DEPENDENCY_VERSION="0.5.1" # https://pypi.org/project/pytest-dependency/#history
-ARG LOCAL_BUILD=false # Build from dist/*.whl rather than pulling latest empanada
-
-# NAPARI Requirements from: https://github.com/napari/napari/blob/v0.4.18x/dockerfile
-ARG MESA_UTILS_VERSION="9.0.0-2" # https://packages.ubuntu.com/noble/mesa-utils
-ARG X11_UTILS_VERSION="7.7+6build2" # https://packages.ubuntu.com/noble/x11-utils
-ARG LIBOPENGL0_VERSION="1.7.0-1build1" # https://packages.ubuntu.com/noble/libopengl0
-ARG LIBGL1_VERSION="1.7.0-1build1" # https://packages.ubuntu.com/noble/libgl1
-ARG LIBGLX_MESA0_VERSION="25.2.8-0ubuntu0.24.04.1" # https://packages.ubuntu.com/noble-updates/libglx-mesa0
-ARG LIBGLIB2_0_0T64_VERSION="2.80.0-6ubuntu3.8" # https://packages.ubuntu.com/noble/libglib2.0-0t64
-ARG LIBFONTCONFIG1_VERSION="2.15.0-1.1ubuntu2" # https://packages.ubuntu.com/noble/libfontconfig1
-ARG LIBXRENDER1_VERSION="1:0.9.10-1.1build1" # https://packages.ubuntu.com/noble/libxrender1
-ARG LIBDBUS_1_3_VERSION="1.14.10-4ubuntu4" # https://packages.ubuntu.com/noble/libdbus-1-3
-ARG LIBXKBCOMMON_X11_0_VERSION="1.6.0-1build1" # https://packages.ubuntu.com/noble/libxkbcommon-x11-0
-ARG LIBXI6_VERSION="2:1.8.1-1build1" # https://packages.ubuntu.com/noble/libxi6
-ARG LIBXCB_ICCCM4_VERSION="0.4.1-1.1build3" # https://packages.ubuntu.com/noble/libxcb-icccm4
-ARG LIBXCB_IMAGE0_VERSION="0.4.0-2build1" # https://packages.ubuntu.com/noble/libxcb-image0
-ARG LIBXCB_KEYSYMS1_VERSION="0.4.0-1build4" # https://packages.ubuntu.com/noble/libxcb-keysyms1
-ARG LIBXCB_RANDR0_VERSION="1.15-1ubuntu2" # https://packages.ubuntu.com/noble/libxcb-randr0
-ARG LIBXCB_RENDER_UTIL0_VERSION="0.3.9-1build4" # https://packages.ubuntu.com/noble/libxcb-render-util0
-ARG LIBXCB_XINERAMA0_VERSION="1.15-1ubuntu2" # https://packages.ubuntu.com/noble/libxcb-xinerama0
-ARG LIBXCB_XINPUT0_VERSION="1.15-1ubuntu2" # https://packages.ubuntu.com/noble/libxcb-xinput0
-ARG LIBXCB_XFIXES0_VERSION="1.15-1ubuntu2" # https://packages.ubuntu.com/noble/libxcb-xfixes0
-ARG LIBXCB_SHAPE0_VERSION="1.15-1ubuntu2" # https://packages.ubuntu.com/noble/libxcb-shape0
-
-
-##########################################
-# Building
-##########################################
-
-# Security SigStore Requirments (https://docs.sigstore.dev/cosign/system_config/installation/)
-RUN apt-get -y update && apt-get install -y --no-install-recommends \
-    ca-certificates=${CA_CERTIFICATES_VERSION} \
-    curl=${CURL_VERSION} \
-    golang-go=${GOLANG_GO_VERSION} \
-    # Clean up and remove cache to reduce the image size.
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && update-ca-certificates
-
-ARG GOBIN=/usr/bin/
-# Steps From https://docs.sigstore.dev/cosign/system_config/installation/#downloading-the-update-framework-tuf-client
-RUN go install github.com/theupdateframework/go-tuf/cmd/tuf-client@${TUF_VERSION} \
-    && curl -o sigstore-root.json "https://raw.githubusercontent.com/sigstore/root-signing/refs/heads/main/metadata/root_history/10.root.json" \
-    && tuf-client init "https://tuf-repo-cdn.sigstore.dev" sigstore-root.json \
-    && tuf-client get "https://tuf-repo-cdn.sigstore.dev" artifact.pub > tmpfile && mv tmpfile artifact.pub \
-    && curl -o cosign-release.sig -L "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64.sig" \
-    && base64 --decode cosign-release.sig > cosign-release.sig.decoded \
-    && curl -o cosign -L "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-amd64" \
-    && openssl dgst -sha256 -verify artifact.pub -signature cosign-release.sig.decoded cosign \
-    && rm cosign-release.sig.decoded cosign-release.sig artifact.pub sigstore-root.json \ 
-    && rm -rf tuf.db \
-    # make cosign exucatble and move to binary PATH.
-    && chmod +x cosign \
-    && mv cosign /usr/bin/cosign
-
-# Python Requirements from (https://devguide.python.org/getting-started/setup-building/#install-dependencies)
-RUN apt-get -y update && apt-get  install -y --no-install-recommends \
-    tar=${TAR_VERSION} \
-    build-essential=${BUILD_ESSENTIAL_VERSION} \
-    gdb=${GDB_VERSION} \
-    lcov=${LCOV_VERSION} \
-    pkg-config=${PKG_CONFIG_VERSION} \
-    libbz2-dev=${LIBBZ2_DEV_VERSION} \
-    libffi-dev=${LIBFFI_DEV_VERSION} \
-    libgdbm-dev=${LIBGDBM_DEV_VERSION} \
-    libgdbm-compat-dev=${LIBGDBM_COMPAT_DEV_VERSION} \
-    liblzma-dev=${LIBLZMA_DEV_VERSION} \
-    libncurses-dev=${LIBNCURSES_DEV_VERSION} \
-    libreadline-dev=${LIBREADLINE_DEV_VERSION} \
-    libsqlite3-dev=${LIBSQLITE3_DEV_VERSION} \
-    libssl-dev=${LIBSSL_DEV_VERSION} \
-    lzma=${LZMA_VERSION} \
-    lzma-dev=${LZMA_DEV_VERSION} \
-    tk-dev=${TK_DEV_VERSION} \
-    uuid-dev=${UUID_DEV_VERSION} \
-    zlib1g-dev=${ZLIB1G_DEV_VERSION} \
-    libzstd-dev=${LIBZSTD_DEV_VERSION} \
-    # Clean up and remove cache to reduce the image size.
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-    
-# Get and Install Python
-
-RUN mkdir -p /opt 
-
-WORKDIR /opt 
-
-RUN curl -o Python-${PYTHON_VERSION}.tar.xz.sigstore -L "https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tar.xz.sigstore" \
-    && curl -o Python-${PYTHON_VERSION}.tar.xz -L "https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tar.xz" \
-    # Verifiy Python is secure.
-    && cosign verify-blob Python-${PYTHON_VERSION}.tar.xz \
-        --bundle Python-${PYTHON_VERSION}.tar.xz.sigstore \
-        --cert-identity ${PYTHON_RELEASE_MANAGER} \
-        --cert-oidc-issuer ${PYTHON_OIDC_ISSUER} \ 
-        && tar -xf Python-${PYTHON_VERSION}.tar.xz Python-${PYTHON_VERSION}/ \ 
-        && rm Python-${PYTHON_VERSION}.tar.xz
-
-
-# Remove Cosign and Go, Curl and CA-Certificates as they are no longer needed.
-RUN rm /usr/bin/cosign  \
-    && rm -rf go \
-    && rm Python-${PYTHON_VERSION}.tar.xz.sigstore \ 
-    && apt-get purge -y --auto-remove  \
-        golang-go \
-        curl
-
-WORKDIR /opt/Python-${PYTHON_VERSION}
-# Configure and install Python
-RUN ./configure --enable-shared --with-lto --prefix=/usr/local LDFLAGS="-Wl,--rpath=/usr/local/lib" \
-    && make install --jobs $(nproc)
-
-# Napari Requirements
-RUN apt-get -y update && apt-get  install -y --no-install-recommends \
-    mesa-utils=${MESA_UTILS_VERSION} \ 
-    x11-utils=${X11_UTILS_VERSION} \
-    libopengl0=${LIBOPENGL0_VERSION} \
-    libgl1=${LIBGL1_VERSION} \
-    libglx-mesa0=${LIBGLX_MESA0_VERSION} \
-    libglib2.0-0t64=${LIBGLIB2_0_0T64_VERSION} \
-    libfontconfig1=${LIBFONTCONFIG1_VERSION} \
-    libxrender1=${LIBXRENDER1_VERSION} \
-    libdbus-1-3=${LIBDBUS_1_3_VERSION} \
-    libxkbcommon-x11-0=${LIBXKBCOMMON_X11_0_VERSION} \
-    libxi6=${LIBXI6_VERSION} \
-    libxcb-icccm4=${LIBXCB_ICCCM4_VERSION} \
-    libxcb-image0=${LIBXCB_IMAGE0_VERSION} \
-    libxcb-keysyms1=${LIBXCB_KEYSYMS1_VERSION} \
-    libxcb-randr0=${LIBXCB_RANDR0_VERSION} \
-    libxcb-render-util0=${LIBXCB_RENDER_UTIL0_VERSION} \
-    libxcb-xinerama0=${LIBXCB_XINERAMA0_VERSION} \
-    libxcb-xinput0=${LIBXCB_XINPUT0_VERSION} \
-    libxcb-xfixes0=${LIBXCB_XFIXES0_VERSION} \
-    libxcb-shape0=${LIBXCB_SHAPE0_VERSION} \
-    # Clean up and remove cache to reduce the image size.
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-# Symlink python
-RUN PYTHON_SHORT=$(echo ${PYTHON_VERSION} | cut -d. -f1,2) \
-    && ln -s /usr/local/bin/python${PYTHON_SHORT} /usr/local/bin/python
-
-ENV PATH="$PATH:/usr/local/bin"
-
-# Upgrading pip and setuptools build dependency
-RUN python -m pip install --no-cache-dir --upgrade pip==${PIP_VERSION}
-
-# N.B. Need a local dist/ directory (empty unless LOCAL_BUILD)
-COPY dist/ dist/
-
-# Installing Napari + Empanada (local or PyPI)
+ARG UBUNTU_VERSION
+ARG DEBIAN_FRONTEND=noninteractive
+ARG TZ=Europe/London
 ARG LOCAL_BUILD=false
-RUN if [ "$LOCAL_BUILD" = "true" ]; then \
-        python -m pip install --no-cache-dir \
-			dist/*.whl \
-			PyQt5; \
-    else \
-        python -m pip install --no-cache-dir \
-            empanada-napari \
-            napari[all]; \
-    fi
+ENV TZ=${TZ}
 
-# Install test dependencies 
-RUN python -m pip install --no-cache-dir \
-	pytest==${PYTEST_VERSION} \
-	pytest-dependency==${PYTEST_DEPENDENCY_VERSION}
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential ca-certificates tzdata locales \
+    libgl1 libglu1-mesa libglx-mesa0 libegl1 libopengl0 mesa-utils \
+    libglib2.0-0t64 libfontconfig1 libxrender1 libdbus-1-3 libxi6 \
+    libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+    libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
+    libxcb-xfixes0 libxcb-xinerama0 libxcb-xinput0 libxcb-xkb1 x11-utils \
+    python3 python3-venv python3-dev \
+    && sed -i 's/^# *\(en_GB.UTF-8\)/\1/' /etc/locale.gen && locale-gen \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy tests
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip
+
+ENV PATH="/opt/venv/bin:${PATH}" \
+    QT_X11_NO_MITSHM=1 \
+    QT_XCB_NO_MITSHM=1 \
+    NAPARI_ASYNC=1
+
+# dist/ must exist in the build context and is used when LOCAL_BUILD=true,
+# otherwise empanada-napari is installed from PyPI. Note in this case 
+# the package is installed separately *before* napari, to ensure the latest
+# version resolves. Additional test requirements are added in 
+# second install
+RUN --mount=type=bind,source=dist,target=/tmp/dist \
+    if [ "${LOCAL_BUILD}" = "true" ]; then \
+        pip install --no-cache-dir /tmp/dist/*.whl; \
+	else \
+		pip install --no-cache-dir empanada-napari; \
+    fi \
+    && pip install --no-cache-dir "napari[all]" "empanada-napari[test]" \
+    && pip freeze > /opt/venv/freeze.txt
+
 COPY tests/ /tests/
 RUN chmod +x /tests/run_container_tests.sh
 
-# Run tests and start napari
-CMD ["/bin/bash", "-c", "/tests/run_container_tests.sh && python -m napari"]
+ARG IMAGE_VERSION="dev"
+ARG IMAGE_REVISION=""
+ARG IMAGE_CREATED=""
+
+LABEL org.opencontainers.image.title="Empanada-napari" \
+      org.opencontainers.image.description="Ubuntu container for napari with empanada plugin" \
+      org.opencontainers.image.authors="Allan Almeida, Mariam Demir, Kedar Narayan" \
+      org.opencontainers.image.source="https://github.com/volume-em/empanada-napari" \
+      org.opencontainers.image.documentation="https://empanada.readthedocs.io/en/latest/index.html" \
+      org.opencontainers.image.licenses="BSD-3-Clause" \
+      org.opencontainers.image.base.name="docker.io/library/ubuntu:${UBUNTU_VERSION}" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.revision="${IMAGE_REVISION}" \
+      org.opencontainers.image.created="${IMAGE_CREATED}"
+
+# Runs the container tests (set SKIP_TESTS=true to skip), then napari
+CMD ["/bin/bash", "-c", "/tests/run_container_tests.sh && exec python -m napari"]
