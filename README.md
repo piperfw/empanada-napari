@@ -1,13 +1,3 @@
-# container-test branch
-Build the container from root of repository:
-```
-docker build -t empanada-napari:test --build-arg LOCAL_BUILD=true .
-```
-Run the container (entrypoint includes `tests/run_container_tests.sh`):
-```
-docker run -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix --device=/dev/dri:/dev/dri empanada-napari:test
-```
-
 # empanada-napari
 
 > [!IMPORTANT]
@@ -88,6 +78,29 @@ Then install the newest version:
 ```shell
 pip install empanada-napari==1.2
 ```
+
+### Container image (Docker)
+
+A container image (Ubuntu 24.04, including `napari` and `torch`) is provided at
+`ghcr.io/volume-em/empanada-napari`. For available tags, see the
+[package page](https://github.com/volume-em/empanada-napari/pkgs/container/empanada-napari).
+
+The container image has no built-in display, so requires access to a running X
+server on the host, e.g. X11 on Linux or Windows with WSLg.
+GPU support requires a NVIDIA GPU and the [Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/)
+(ignore the GPU instructions below).
+
+```shell
+xhost +local:docker
+docker run --rm --gpus all \
+  -e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v "$PWD":/data -w /data \
+  ghcr.io/volume-em/empanada-napari:latest
+```
+
+Omit `--gpus all` to run on CPU. The command mounts the current directory at `/data`; adjust
+as needed. The container runs a short set of self-tests before starting napari. To skip
+them, pass `-e SKIP_TESTS=true`, or pass your own entrypoint.
 
 
 ![empanada](images/demo.gif)
